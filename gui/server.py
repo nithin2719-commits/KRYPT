@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""Local web backend for WRAITH (the ctf-solver GUI).
+
+Binds to 127.0.0.1 only. Serves the themed single-page UI and exposes:
+  GET  /                -> index.html
+  POST /api/solve       -> {"target","description","ai"} -> report
+  POST /api/upload?desc= -> raw file bytes (X-Filename) -> saved + report
+  GET  /api/health      -> {"ok": true, "ollama": <model|null>}
+
+The optional description/briefing is used to (a) derive the flag format, so the
+sweep is precise, (b) get swept for flags itself, and (c) prime the AI assist.
+
+Authorized CTF use only.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # ~/ctf-solver
+GUI = os.path.join(ROOT, "gui")
+UPLOADS = os.path.join(GUI, "uploads")
+sys.path.insert(0, ROOT)
+
+from ctfsolver.__main__ import run_pipeline, to_markdown, WORKSPACE  # noqa: E402
+from ctfsolver import ai, agents, categories, vault  # noqa: E402
+from ctfsolver.flags import scan_text  # noqa: E402
+
+HOST = "127.0.0.1"
+PORT = int(os.environ.get("CTF_GUI_PORT", "8777"))
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+FMT_RE = re.compile(r"([A-Za-z0-9_]{2,20})\{[^}]{0,60}\}")
+MAX_UPLOAD = 512 * 1024 * 1024
+
+
+def _derive_format(desc: str) -> str | None:
+    """Pull a flag wrapper (e.g. picoCTF{...}) out of a challenge briefing."""
+    m = FMT_RE.search(desc or "")
+    return re.escape(m.group(1)) + r"\{[^}]+\}" if m else None
+
+
+def _is_placeholder(flag: str) -> bool:
+    """A format example like myEvent{...} or FLAG{xxxx}, not a real flag."""
+    m = re.search(r"\{([^}]*)\}", flag)
+    if not m:
+        return False
+    inner = m.group(1).strip()
+    return inner in ("", "...", "…") or re.fullmatch(r"[.\s…xX*?_-]+", inner) is not None
+
+
+def _aggregate(steps: list[dict]) -> list[dict]:
+    seen: dict[str, dict] = {}
+    for st in steps:
+        for f in st.get("flags") or []:
+            cur = seen.get(f["flag"])
+            if not cur or f["confidence"] > cur["confidence"]:
+                seen[f["flag"]] = {**f, "source": st["step"]}
+    return sorted(seen.values(), key=lambda d: -d["confidence"])
+
+
+def _clean(res: dict) -> dict:
+    for st in res.get("steps", []):
+        if st.get("output"):
+            st["output"] = ANSI.sub("", st["output"])
+    res["markdown"] = ANSI.sub("", to_markdown(res))
+    return res
+
+
+def _fileless(description: str, category: str) -> dict:
+    """Common/no-file mode: the briefing itself is the challenge (osint, misc,
+    a pasted cipher). Text triage + magic decode, no file needed."""
+    steps = categories.text_triage(description) if description else []
+    workdir = os.path.join(WORKSPACE, "common-" + str(abs(hash(description)) % 10**8))
+    os.makedirs(workdir, exist_ok=True)
+    return {"target": {"kind": "common", "subkind": category, "raw": description[:80],
+                       "mime": ""}, "workdir": workdir, "steps": steps, "flags": []}
+
+
+def solve(target: str, description: str = "", use_ai: bool = False,
+          category: str = "auto", event: str = "", engine: str = "triage") -> dict:
+    """Run the pipeline with an optional briefing driving format + AI context.
+    With no target but a briefing, runs the common (no-file) text pipeline.
+    When `event` is set and a flag is found, auto-saves it to the Vault + writeup."""
+    description = (description or "").strip()
+    old_fmt = os.environ.get("CTF_FLAG_FORMAT")
+    set_fmt = False
+    try:
+        if description and not old_fmt:
+            fmt = _derive_format(description)
+            if fmt:
+                os.environ["CTF_FLAG_FORMAT"] = fmt
+                set_fmt = True
+        res = run_pipeline(target) if target else _fileless(description, category)
+        if description and target:
+            dfl = [f for f in scan_text(description) if not _is_placeholder(f["flag"])]
+            res["steps"].insert(0, {
+                "step": "briefing",
+                "summary": "operator-supplied context"
+                           + ("; derived flag format" if set_fmt else ""),
+                "output": description[:2000], "flags": dfl})
+        # always map the domain arsenal, then aggregate flags
+        res["steps"].append(categories.toolset_step(category))
+        res["flags"] = _aggregate(res["steps"])
+        if description:
+            res["briefing"] = description
+        res["category"] = category
+        res = _clean(res)
+        if use_ai and ai.available():
+            ctx = (f"BRIEFING:\n{description}\n\n" if description else "") + res["markdown"]
+            res["ai"] = ai.ask(ctx)
+        # auto-save the top flag to the active event (with a generated writeup)
+        if event and event.strip() and res["flags"]:
+            try:
+                top = res["flags"][0]["flag"]
+                res["saved"] = vault.add_solve(event.strip(), res, top, engine)
+            except Exception as e:
+                res["saved"] = {"error": str(e)}
+        return res
+    finally:
+        if set_fmt:
+            os.environ.pop("CTF_FLAG_FORMAT", None)
+
+
+def deep(target: str, description: str, provider: str,
+         category: str = "auto", event: str = "") -> dict:
+    """Fast triage, then PREPARE (not run) a category-tuned MCP agent command."""
+    res = solve(target, description, use_ai=False, category=category,
+                event=event, engine=provider)
+    subject = target or f"(no file) {description[:120]}"
+    res["handoff"] = agents.command_for(provider, subject,
+                                        (description or "").strip(),
+                                        res["workdir"], category)
+    return res
+
+
+def _safe_name(name: str) -> str:
+    name = os.path.basename(name or "upload.bin")
+    return "".join(c if c.isalnum() or c in "._-" else "_" for c in name) or "upload.bin"
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "wraith/1.0"
+
+    def log_message(self, *a):
+        pass
+
+    def _send(self, code, body, ctype="application/json", nocache=False):
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body, default=str).encode()
+        elif isinstance(body, str):
+            body = body.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        if nocache:
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+        if path in ("/", "/index.html"):
+            try:
+                with open(os.path.join(GUI, "index.html"), "rb") as fh:
+                    self._send(200, fh.read().decode(), "text/html; charset=utf-8",
+                               nocache=True)
+            except OSError:
+                self._send(500, {"error": "index.html missing"})
+        elif path == "/api/health":
+            model = ai.DEFAULT_MODEL if ai.available() else None
+            self._send(200, {"ok": True, "ollama": model,
+                             "engines": agents.available()})
+        elif path == "/api/events":
+            self._send(200, vault.list_events())
+        elif path == "/api/writeup":
+            sid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
+            self._send(200, {"id": sid, "writeup": vault.get_writeup(sid)})
+        else:
+            self._send(404, {"error": "not found"})
+
+    def _read_body(self) -> bytes:
+        n = int(self.headers.get("Content-Length", "0"))
+        return b"" if n > MAX_UPLOAD else self.rfile.read(n)
+
+    def do_POST(self):
+        try:
+            path = urlparse(self.path).path
+            if path == "/api/solve":
+                data = json.loads(self._read_body() or b"{}")
+                target = (data.get("target") or "").strip()
+                desc = data.get("description", "")
+                if not target and not desc.strip():
+                    return self._send(400, {"error": "give a target or a briefing"})
+                return self._send(200, solve(target, desc, bool(data.get("ai")),
+                                             data.get("category", "auto"),
+                                             data.get("event", ""),
+                                             "local" if data.get("ai") else "triage"))
+            if path == "/api/upload":
+                os.makedirs(UPLOADS, exist_ok=True)
+                fname = _safe_name(self.headers.get("X-Filename", "upload.bin"))
+                dest = os.path.join(UPLOADS, fname)
+                body = self._read_body()
+                if not body:
+                    return self._send(400, {"error": "empty or too-large upload"})
+                with open(dest, "wb") as fh:
+                    fh.write(body)
+                q = parse_qs(urlparse(self.path).query)
+                desc = q.get("desc", [""])[0]
+                cat = q.get("category", ["auto"])[0]
+                ev = q.get("event", [""])[0]
+                ai_on = self.headers.get("X-Ai") == "1"
+                return self._send(200, solve(dest, desc, ai_on, cat, ev,
+                                             "local" if ai_on else "triage"))
+            if path == "/api/deep":
+                data = json.loads(self._read_body() or b"{}")
+                target = (data.get("target") or "").strip()
+                desc = data.get("description", "")
+                provider = data.get("provider") or "claude"
+                if not target and not desc.strip():
+                    return self._send(400, {"error": "give a target or a briefing"})
+                return self._send(200, deep(target, desc, provider,
+                                            data.get("category", "auto"),
+                                            data.get("event", "")))
+            if path == "/api/event/delete":
+                data = json.loads(self._read_body() or b"{}")
+                ok = vault.delete_event(data.get("event_id", ""))
+                return self._send(200, {"ok": ok})
+            self._send(404, {"error": "not found"})
+        except Exception as e:
+            self._send(500, {"error": f"{type(e).__name__}: {e}"})
+
+
+def main():
+    os.makedirs(UPLOADS, exist_ok=True)
+    srv = ThreadingHTTPServer((HOST, PORT), Handler)
+    print(f"WRAITH on http://{HOST}:{PORT}")
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        srv.shutdown()
+
+
+if __name__ == "__main__":
+    main()
