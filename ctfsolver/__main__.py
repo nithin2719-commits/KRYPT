@@ -20,7 +20,7 @@ import sys
 
 from . import flags as flagmod
 from .detect import classify
-from .triage import archive, binary, crypto, generic, image, netcat, pcap, web
+from .triage import archive, audio, binary, crypto, generic, image, netcat, pcap, web
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKSPACE = os.path.join(ROOT, "workspace")
@@ -29,6 +29,7 @@ WORKSPACE = os.path.join(ROOT, "workspace")
 FILE_ROUTER = {
     "binary": binary,
     "image": image,
+    "audio": audio,
     "archive": archive,
     "pcap": pcap,
     "text": crypto,
