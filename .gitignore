@@ -1,0 +1,7 @@
+workspace/
+vault/
+gui/uploads/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
