@@ -107,22 +107,26 @@ def make_writeup(res: dict, flag: str, event_name: str) -> str:
         md.append("See the approach below.")
     md += ["", f"> **Flag:** `{flag}`", ""]
 
+    def _clip(s: str, n: int = 140) -> str:
+        s = " ".join((s or "").split())
+        return s if len(s) <= n else s[:n - 1] + "…"
+
     # Approach — recon then the winning move
     md += ["## Approach", "", "### 1. Reconnaissance", ""]
     recon = [s for s in steps if s.get("step") in
              ("file", "strings", "exiftool", "binwalk+entropy", "checksec",
               "readelf-header", "symbols", "7z-list", "headers", "banner",
-              "preview", "briefing")][:5]
+              "preview")][:5]
     if recon:
         for s in recon:
-            md.append(f"- **{s['step']}** — {s.get('summary','')}")
+            md.append(f"- **{s['step']}** — {_clip(s.get('summary',''))}")
     else:
         md.append("- Automated triage swept the target for the cheap wins.")
     md.append("")
 
     if win:
         md += [f"### 2. Capturing the flag — `{win['step']}`", "",
-               win.get("summary", ""), ""]
+               _clip(win.get("summary", ""), 200), ""]
         out = (win.get("output") or "").strip()
         if out:
             md += ["```", out[:2000], "```", ""]
@@ -130,11 +134,13 @@ def make_writeup(res: dict, flag: str, event_name: str) -> str:
     # Flag
     md += ["## Flag", "", "```", flag, "```", ""]
 
-    # Tools & method
+    # Tools & method (compact — skip meta steps, clip long summaries)
     md += ["## Tools & method", ""]
     for s in steps:
-        mark = " ⟵ flag" if s.get("flags") else ""
-        md.append(f"- `{s['step']}` — {s.get('summary','')}{mark}")
+        if s.get("step") in ("briefing", "next", "solvers"):
+            continue
+        mark = " ⟵ **flag**" if s.get("flags") else ""
+        md.append(f"- `{s['step']}` — {_clip(s.get('summary',''), 100)}{mark}")
     md.append("")
 
     # Takeaways
