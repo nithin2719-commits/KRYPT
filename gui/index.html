@@ -172,7 +172,7 @@
   #writeup pre{background:#0b0b0c;border:1px solid var(--line);border-radius:8px;padding:11px 13px;overflow:auto;
     font-size:12px;color:var(--fg2);white-space:pre-wrap;word-break:break-word}
   #writeup .wtop{display:flex;gap:10px;margin-bottom:8px}
-  #writeup .wact{font-size:11px;color:var(--fg2);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+  #writeup .wact{font-size:11px;color:var(--fg2);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer;text-decoration:none;display:inline-block}
   #writeup .wact:hover{border-color:#fff;color:#fff}
   @media (max-width:720px){.vgrid{grid-template-columns:1fr}}
 
@@ -536,7 +536,10 @@ function renderSolves(){
   const box=$("#vsolves"); $("#writeup").classList.remove("show");
   if(!ev){box.innerHTML='<div class="vempty">Select an event.</div>';return;}
   if(!ev.solves.length){box.innerHTML='<div class="vempty">No flags captured in this event yet.</div>';return;}
-  box.innerHTML=ev.solves.slice().reverse().map(s=>
+  const bar='<div class="resbar" style="margin-bottom:12px">'
+    +'<a class="act" style="text-decoration:none" href="/api/export_event?id='+ev.id+'&fmt=md" download>⬇ EXPORT EVENT · MD</a>'
+    +'<a class="act" style="text-decoration:none" href="/api/export_event?id='+ev.id+'&fmt=pdf" download>⬇ EXPORT EVENT · PDF</a></div>';
+  box.innerHTML=bar+ev.solves.slice().reverse().map(s=>
     '<div class="vsolve" data-wid="'+s.id+'"><div class="vf">'+esc(s.flag)+'</div>'
     +'<div class="vmeta"><span class="vcat">'+esc((s.category||"?").toUpperCase())+'</span>'
     +'<span>'+esc(s.engine||"triage")+'</span><span>'+esc(s.ts)+'</span>'
@@ -560,7 +563,10 @@ async function showWriteup(wid){
   const w=$("#writeup"); w.innerHTML="loading…"; w.classList.add("show");
   try{
     const d=await (await fetch("/api/writeup?id="+wid)).json();
-    w.innerHTML='<div class="wtop"><span class="wact" id="wcopy">⧉ COPY MARKDOWN</span></div>'+mdlite(d.writeup||"(empty)");
+    w.innerHTML='<div class="wtop"><span class="wact" id="wcopy">⧉ COPY</span>'
+      +'<a class="wact" href="/api/export?id='+wid+'&fmt=md" download>⬇ MARKDOWN</a>'
+      +'<a class="wact" href="/api/export?id='+wid+'&fmt=pdf" download>⬇ PDF</a></div>'
+      +mdlite(d.writeup||"(empty)");
     const wc=$("#wcopy"); if(wc) wc.onclick=()=>copy(d.writeup||"");
     w.scrollIntoView({behavior:"smooth",block:"nearest"});
   }catch(e){w.innerHTML='<div class="vempty">could not load writeup</div>';}
