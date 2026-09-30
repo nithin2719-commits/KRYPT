@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# ctf-solver launcher. Runs the triage/flag-hunter pipeline.
+#   ./ctf <file | url | host:port> [--ai] [--json]
+# Optional: export CTF_FLAG_FORMAT='picoCTF\{[^}]+\}' to pin the event format.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="${CTF_PYTHON:-python3}"
+cd "$HERE"
+exec "$PY" -m ctfsolver "$@"
