@@ -1,0 +1,15 @@
+# KRYPT core is pure Python stdlib — no install needed for triage + GUI.
+# The optional autonomous solvers use these (already provided by many distros /
+# pentest setups). Install only what you need:
+
+# rev / pwn solvers
+angr
+pwntools
+z3-solver
+
+# crypto
+pycryptodome
+
+# Everything else (strings, binwalk, exiftool, steghide, zsteg, sqlmap, nmap,
+# volatility3, rsactftool, ghidra, radare2, hashcat/john, tshark) are system
+# tools — install via your package manager (BlackArch / Kali / apt).
