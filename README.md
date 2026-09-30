@@ -92,3 +92,20 @@ No pip dependencies — pure stdlib driving installed CLI tools.
 hexstrike-ai (pwntools/sqlmap/john/volatility…), the `ghidra` MCP
 (`import_binary` → `decompile_function`), and the `/cybersec-ctf` skill (818-skill
 library). In Claude Code, those tools can be driven directly against a challenge.
+
+## Vault & writeups
+
+Name your CTF in the **EVENT** field; every captured flag auto-saves to that
+event with a generated **writeup** (title, TL;DR, approach, flag, tools,
+takeaways) — deterministic, no AI tokens. Open **◆ VAULT** to browse events and
+solves, read writeups, and **export** any writeup (or a whole event) as
+**Markdown** or **PDF**. Storage is human-readable under `~/ctf-solver/vault/`.
+
+## Tests
+
+```bash
+python tests/test_decoders.py
+python tests/test_vault.py
+python tests/test_categories.py
+```
+CI runs these on every push (see `.github/workflows/tests.yml`).
