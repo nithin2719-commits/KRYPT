@@ -158,10 +158,55 @@ def d_zlib(b):
         return None
 
 
+_B58 = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+
+def d_base58(b):
+    s = _WS.sub(b"", b)
+    if not s or len(s) < 4 or any(c not in _B58 for c in s):
+        return None
+    try:
+        num = 0
+        for c in s:
+            num = num * 58 + _B58.index(c)
+        raw = num.to_bytes((num.bit_length() + 7) // 8, "big") if num else b""
+        pad = len(s) - len(s.lstrip(b"1"))
+        return b"\x00" * pad + raw or None
+    except Exception:
+        return None
+
+
+_MORSE = {
+    ".-": "A", "-...": "B", "-.-.": "C", "-..": "D", ".": "E", "..-.": "F",
+    "--.": "G", "....": "H", "..": "I", ".---": "J", "-.-": "K", ".-..": "L",
+    "--": "M", "-.": "N", "---": "O", ".--.": "P", "--.-": "Q", ".-.": "R",
+    "...": "S", "-": "T", "..-": "U", "...-": "V", ".--": "W", "-..-": "X",
+    "-.--": "Y", "--..": "Z", "-----": "0", ".----": "1", "..---": "2",
+    "...--": "3", "....-": "4", ".....": "5", "-....": "6", "--...": "7",
+    "---..": "8", "----.": "9",
+}
+
+
+def d_morse(b):
+    try:
+        s = b.decode("ascii").strip()
+    except UnicodeDecodeError:
+        return None
+    if not s or not re.fullmatch(r"[.\-/ ]+", s) or (" " not in s and "/" not in s):
+        return None
+    words = re.split(r"\s*/\s*| {3,}", s)
+    out = []
+    for w in words:
+        out.append("".join(_MORSE.get(sym, "") for sym in w.split()))
+    res = " ".join(x for x in out if x)
+    return res.encode() if res.strip() else None
+
+
 TRANSFORMS = [
     ("base64", d_base64), ("base32", d_base32), ("base85", d_base85),
-    ("ascii85", d_ascii85), ("hex", d_hex), ("decimal", d_decimal),
-    ("binary", d_binary), ("url", d_url), ("rot13", d_rot13),
+    ("ascii85", d_ascii85), ("base58", d_base58), ("hex", d_hex),
+    ("decimal", d_decimal), ("binary", d_binary), ("morse", d_morse),
+    ("url", d_url), ("rot13", d_rot13),
     ("rot47", d_rot47), ("atbash", d_atbash), ("reverse", d_reverse),
     ("gzip", d_gzip), ("zlib", d_zlib),
 ]
