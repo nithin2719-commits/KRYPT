@@ -90,6 +90,15 @@ def triage(path: str, workdir: str) -> list[dict]:
                           "summary": "executed Brainfuck (forward + reversed)",
                           "output": r.stdout[:2000], "flags": flags})
 
+    # Hidden-in-text: zero-width unicode, whitespace stego, acrostics, capitals
+    py = sys.executable or "python3"
+    ts = run([py, os.path.join(_SOLVERS, "textstego.py"), path], timeout=30)
+    if ts.found and "NO_HIDDEN_TEXT" not in ts.stdout and ts.stdout.strip():
+        steps.append({"step": "text-stego",
+                      "summary": "hidden-message extraction (zero-width / whitespace "
+                                 "/ acrostic / capitals)",
+                      "output": ts.stdout[:3000], "flags": scan_text(ts.stdout)})
+
     # Magic engine: BFS across all decoders + single-byte XOR brute.
     from ..decoders import magic
     m = magic(data)
