@@ -6,6 +6,7 @@ CTF paths; it does not brute-force or exploit anything on its own.
 """
 from __future__ import annotations
 
+import re
 from urllib.parse import urljoin
 
 from ..flags import scan_text
@@ -14,8 +15,14 @@ from ..runner import have, run
 COMMON_PATHS = [
     "/robots.txt", "/sitemap.xml", "/.git/HEAD", "/.env", "/flag",
     "/flag.txt", "/admin", "/backup", "/.htaccess", "/index.php.bak",
-    "/api", "/status", "/debug",
+    "/api", "/status", "/debug", "/.svn/entries", "/config.php.bak",
+    "/server-status", "/.DS_Store", "/swagger.json", "/graphql",
 ]
+_FORM = re.compile(r"<form[^>]*>(.*?)</form>", re.I | re.S)
+_ACTION = re.compile(r'action\s*=\s*["\']([^"\']*)', re.I)
+_INPUT = re.compile(r'<input[^>]*name\s*=\s*["\']([^"\']+)', re.I)
+_METHOD = re.compile(r'method\s*=\s*["\']?(\w+)', re.I)
+_COOKIE_JWT = re.compile(r'eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}')
 
 
 def _curl(url: str, args: list[str], timeout: int = 20):
@@ -55,16 +62,43 @@ def triage(url: str, workdir: str) -> list[dict]:
                   "summary": f"{len(hits)} interesting path(s)",
                   "output": "\n".join(hits), "flags": []})
 
-    # Tech fingerprint if whatweb present
+    # Forms & inputs — the attack surface (SQLi / XSS / SSTI / upload targets)
+    forms = []
+    for fm in _FORM.findall(body):
+        act = (_ACTION.search(fm) or [None, "(self)"])[1]
+        meth = (_METHOD.search(fm) or [None, "GET"])[1].upper()
+        names = _INPUT.findall(fm)
+        forms.append(f"{meth} {act}  params={names}")
+    if forms:
+        steps.append({"step": "forms",
+                      "summary": f"{len(forms)} form(s) — test for SQLi/XSS/SSTI",
+                      "output": "\n".join(forms[:20]), "flags": []})
+
+    # JWT in body/headers?
+    jwts = set(_COOKIE_JWT.findall(body)) | set(_COOKIE_JWT.findall(
+        _curl(url, ["-D", "-", "-o", "/dev/null"]).stdout))
+    if jwts:
+        steps.append({"step": "jwt",
+                      "summary": f"{len(jwts)} JWT(s) found — try alg:none / weak-secret",
+                      "output": "\n".join(list(jwts)[:5]), "flags": []})
+
+    # Tech fingerprint
     if have("whatweb"):
         r = run(["whatweb", "--color=never", url], timeout=30)
         steps.append({"step": "whatweb", "summary": "tech fingerprint",
                       "output": r.stdout[:2000], "flags": []})
 
+    # Parameter discovery (arjun) — finds hidden GET params
+    if have("arjun"):
+        out = run(["arjun", "-u", url, "-oT", "/dev/stdout", "-q"], timeout=90)
+        if out.ok() and out.stdout.strip():
+            steps.append({"step": "arjun",
+                          "summary": "hidden parameter discovery",
+                          "output": out.stdout[:2000], "flags": []})
+
     steps.append({"step": "next",
-                  "summary": "Deeper: hexstrike ffuf/gobuster for content "
-                             "discovery, nuclei for known CVEs, and sqlmap / "
-                             "the exploiting-* skills for the specific bug "
-                             "class this looks like.",
+                  "summary": "Deeper: feroxbuster/ffuf for content discovery, "
+                             "nuclei for CVEs, sqlmap on the forms above, and the "
+                             "exploiting-* skills for the matched bug class.",
                   "output": "", "flags": []})
     return steps
