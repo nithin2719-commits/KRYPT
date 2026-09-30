@@ -169,6 +169,7 @@
   #writeup h3{font-size:13px;color:#fff;margin:12px 0 4px}
   #writeup li{color:var(--fg2);font-size:13px;line-height:1.6}
   #writeup code{color:#fff}
+  #writeup blockquote{margin:10px 0;padding:8px 14px;background:#0b0b0c;border-left:3px solid var(--line2);color:var(--fg2);font-size:13px}
   #writeup pre{background:#0b0b0c;border:1px solid var(--line);border-radius:8px;padding:11px 13px;overflow:auto;
     font-size:12px;color:var(--fg2);white-space:pre-wrap;word-break:break-word}
   #writeup .wtop{display:flex;gap:10px;margin-bottom:8px}
@@ -549,12 +550,16 @@ function mdlite(md){
   const parts=md.split(/```/); let out="";
   parts.forEach((seg,i)=>{
     if(i%2){out+="<pre>"+esc(seg.replace(/^\n/,""))+"</pre>";return;}
+    const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>");
     seg.split("\n").forEach(line=>{
       if(/^# /.test(line))out+="<h1>"+esc(line.slice(2))+"</h1>";
       else if(/^## /.test(line))out+="<h2>"+esc(line.slice(3))+"</h2>";
       else if(/^### /.test(line))out+="<h3>"+esc(line.slice(4))+"</h3>";
-      else if(/^- /.test(line))out+="<li>"+esc(line.slice(2)).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>")+"</li>";
-      else if(line.trim())out+="<div>"+esc(line).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>")+"</div>";
+      else if(/^> /.test(line))out+="<blockquote>"+inl(line.slice(2))+"</blockquote>";
+      else if(/^(-|\*) /.test(line))out+="<li>"+inl(line.slice(2))+"</li>";
+      else if(/^\d+\. /.test(line))out+="<li>"+inl(line.replace(/^\d+\. /,""))+"</li>";
+      else if(line.trim()==="---")out+="<hr style='border:0;border-top:1px solid var(--line);margin:14px 0'>";
+      else if(line.trim())out+="<div>"+inl(line)+"</div>";
     });
   });
   return out;
