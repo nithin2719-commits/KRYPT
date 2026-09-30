@@ -74,15 +74,16 @@ def main():
     if sum(1 for c in src if c in BF) < max(8, 0.5 * len(src.strip())):
         print("NOT_BRAINFUCK")
         return 1
-    fwd = run(src)
-    rev = run(src[::-1])
-    printed = False
-    if fwd and _printable(fwd):
-        print("FORWARD:", fwd.decode("latin-1", "replace"))
-        printed = True
-    if rev and _printable(rev) and rev != fwd:
-        print("REVERSED:", rev.decode("latin-1", "replace"))
-        printed = True
+    swap = {"[": "]", "]": "[", "<": ">", ">": "<"}
+    mirror = "".join(swap.get(c, c) for c in src)[::-1]   # reversed + flipped
+    variants = [("FORWARD", src), ("REVERSED", src[::-1]), ("MIRRORED", mirror)]
+    seen, printed = set(), False
+    for label, code in variants:
+        out = run(code)
+        if out and _printable(out) and out not in seen:
+            seen.add(out)
+            print(f"{label}:", out.decode("latin-1", "replace"))
+            printed = True
     if not printed:
         print("NO_PRINTABLE_OUTPUT")
         return 1
