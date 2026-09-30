@@ -27,7 +27,7 @@ UPLOADS = os.path.join(GUI, "uploads")
 sys.path.insert(0, ROOT)
 
 from ctfsolver.__main__ import run_pipeline, to_markdown, WORKSPACE  # noqa: E402
-from ctfsolver import ai, agents, categories, vault  # noqa: E402
+from ctfsolver import ai, agents, categories, vault, export  # noqa: E402
 from ctfsolver.flags import scan_text  # noqa: E402
 
 HOST = "127.0.0.1"
@@ -179,8 +179,42 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/writeup":
             sid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
             self._send(200, {"id": sid, "writeup": vault.get_writeup(sid)})
+        elif path in ("/api/export", "/api/export_event"):
+            q = parse_qs(urlparse(self.path).query)
+            wid = q.get("id", [""])[0]
+            fmt = q.get("fmt", ["md"])[0]
+            if path == "/api/export":
+                md, name = vault.get_writeup(wid), "writeup-" + wid
+            else:
+                ename, md = vault.event_writeup(wid)
+                name = vault._slug(ename) + "-writeups" if ename else "event"
+            if not md:
+                return self._send(404, {"error": "nothing to export"})
+            self._send_download(md, name, fmt)
         else:
             self._send(404, {"error": "not found"})
+
+    def _send_download(self, md: str, name: str, fmt: str):
+        if fmt == "pdf":
+            out = os.path.join(WORKSPACE, name + ".pdf")
+            if export.md_to_pdf(md, out, name):
+                with open(out, "rb") as fh:
+                    data = fh.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/pdf")
+                self.send_header("Content-Disposition", f'attachment; filename="{name}.pdf"')
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            fmt = "md"  # fall back to markdown if no browser for PDF
+        data = md.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/markdown; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="{name}.md"')
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def _read_body(self) -> bytes:
         n = int(self.headers.get("Content-Length", "0"))
