@@ -107,7 +107,8 @@
   #target{flex:1;min-width:230px}
   .briefwrap{margin-top:20px}
   .brieflabel{font-size:10px;letter-spacing:2px;color:var(--muted);margin:0 0 7px 2px}
-  .brieflabel b{color:var(--dim)}
+  .brieflabel b{color:var(--fg2)}
+  .brieflabel code{color:var(--fg2);background:#0b0b0c;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:10px}
   #desc{display:block;min-height:104px;resize:vertical;line-height:1.55;font-size:14px}
   .go{font-family:var(--display);font-weight:800;letter-spacing:2px;font-size:14px;
     background:#fff;color:#000;border:none;padding:16px 26px;border-radius:10px;cursor:pointer;min-width:158px;
@@ -281,11 +282,11 @@
     <div class="prompt">
       <span class="caret">▶</span>
       <input id="target" class="field" autofocus spellcheck="false"
-             placeholder="file path   ·   https://target/chal   ·   host:port">
+             placeholder="optional — file path · URL · host:port  (or just drop a file / paste the challenge below)">
       <button class="go" id="go">HUNT</button>
     </div>
     <div class="briefwrap">
-      <div class="brieflabel">CHALLENGE BRIEFING — prompt, hints, flag format, <b>or the whole challenge</b> (OSINT / cipher / misc). HUNT works with just this, no file needed.</div>
+      <div class="brieflabel">CHALLENGE BRIEFING — <b>paste the whole challenge here.</b> KRYPT reads it, finds any <code>nc host port</code>/URL/flag-format inside, and works it. A file or target above is optional.</div>
       <textarea id="desc" class="field" spellcheck="false"
         placeholder="e.g. 'The server leaks memory. Flag format: FLAG{...}. Author says look at the stack.'"></textarea>
     </div>
