@@ -85,11 +85,28 @@ def _clean(res: dict) -> dict:
 
 
 def _fileless(description: str, category: str) -> dict:
-    """Common/no-file mode: the briefing itself is the challenge (osint, misc,
-    a pasted cipher). Text triage + magic decode, no file needed."""
+    """Common/no-file mode: the briefing itself is the challenge. Text triage +
+    magic decode, PLUS it extracts any nc host:port / URL mentioned in the
+    briefing and actually probes them."""
+    from ctfsolver.detect import extract_targets
+    from ctfsolver.triage import netcat as _nc, web as _web
+
     steps = categories.text_triage(description) if description else []
     workdir = os.path.join(WORKSPACE, "common-" + str(abs(hash(description)) % 10**8))
     os.makedirs(workdir, exist_ok=True)
+
+    for kind, host, port in extract_targets(description)[:3]:
+        if kind == "netcat":
+            steps.append({"step": "target-found",
+                          "summary": f"service in briefing: {host}:{port} — connecting",
+                          "output": "", "flags": []})
+            steps += _nc.triage(host, port, workdir)
+        elif kind == "url":
+            steps.append({"step": "target-found",
+                          "summary": f"URL in briefing: {host} — recon",
+                          "output": "", "flags": []})
+            steps += _web.triage(host, workdir)
+
     return {"target": {"kind": "common", "subkind": category, "raw": description[:80],
                        "mime": ""}, "workdir": workdir, "steps": steps, "flags": []}
 
