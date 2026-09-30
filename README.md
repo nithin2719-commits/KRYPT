@@ -108,4 +108,4 @@ python tests/test_decoders.py
 python tests/test_vault.py
 python tests/test_categories.py
 ```
-CI runs these on every push (see `.github/workflows/tests.yml`).
+CI runs these on every push (see `ci/tests.yml`).
