@@ -37,19 +37,33 @@ FMT_RE = re.compile(r"([A-Za-z0-9_]{2,20})\{[^}]{0,60}\}")
 MAX_UPLOAD = 512 * 1024 * 1024
 
 
-def _derive_format(desc: str) -> str | None:
-    """Pull a flag wrapper (e.g. picoCTF{...}) out of a challenge briefing."""
+def _derive_format(desc: str):
+    """Pull a flag wrapper (e.g. picoCTF{...}) out of a briefing.
+    Returns (format_regex, example_string) so the example can be excluded."""
     m = FMT_RE.search(desc or "")
-    return re.escape(m.group(1)) + r"\{[^}]+\}" if m else None
+    if not m:
+        return (None, None)
+    return (re.escape(m.group(1)) + r"\{[^}]+\}", m.group(0))
+
+
+# inner words that mean "the flag/password goes here", not an actual flag
+_PLACEHOLDER_WORDS = {
+    "password", "passwd", "pass", "flag", "the_flag", "theflag", "your_flag",
+    "yourflag", "flag_here", "flaghere", "redacted", "input", "content",
+    "something", "secret", "answer", "value", "text", "here",
+}
 
 
 def _is_placeholder(flag: str) -> bool:
-    """A format example like myEvent{...} or FLAG{xxxx}, not a real flag."""
+    """A format example like myEvent{...}, FLAG{xxxx}, or bushbash{password} —
+    not a real flag."""
     m = re.search(r"\{([^}]*)\}", flag)
     if not m:
         return False
     inner = m.group(1).strip()
-    return inner in ("", "...", "…") or re.fullmatch(r"[.\s…xX*?_-]+", inner) is not None
+    if inner in ("", "...", "…") or re.fullmatch(r"[.\s…xX*?_\-]+", inner):
+        return True
+    return inner.lower().strip("_- ") in _PLACEHOLDER_WORDS
 
 
 def _aggregate(steps: list[dict]) -> list[dict]:
@@ -88,15 +102,17 @@ def solve(target: str, description: str = "", use_ai: bool = False,
     description = (description or "").strip()
     old_fmt = os.environ.get("CTF_FLAG_FORMAT")
     set_fmt = False
+    example = None
     try:
         if description and not old_fmt:
-            fmt = _derive_format(description)
+            fmt, example = _derive_format(description)
             if fmt:
                 os.environ["CTF_FLAG_FORMAT"] = fmt
                 set_fmt = True
         res = run_pipeline(target) if target else _fileless(description, category)
         if description and target:
-            dfl = [f for f in scan_text(description) if not _is_placeholder(f["flag"])]
+            dfl = [f for f in scan_text(description)
+                   if not _is_placeholder(f["flag"]) and f["flag"] != example]
             res["steps"].insert(0, {
                 "step": "briefing",
                 "summary": "operator-supplied context"
@@ -104,6 +120,11 @@ def solve(target: str, description: str = "", use_ai: bool = False,
                 "output": description[:2000], "flags": dfl})
         # always map the domain arsenal, then aggregate flags
         res["steps"].append(categories.toolset_step(category))
+        # strip the format-example and any placeholder from every step's flags
+        for st in res["steps"]:
+            if st.get("flags"):
+                st["flags"] = [f for f in st["flags"]
+                               if f["flag"] != example and not _is_placeholder(f["flag"])]
         res["flags"] = _aggregate(res["steps"])
         if description:
             res["briefing"] = description
