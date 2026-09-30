@@ -10,6 +10,30 @@ from .runner import run
 URL_RE = re.compile(r"^https?://", re.I)
 HOSTPORT_RE = re.compile(r"^(?:nc\s+)?([\w.\-]+)[\s:]+(\d{1,5})$")
 
+# extract actionable targets embedded in free-text (a challenge briefing)
+_NC = re.compile(r"\bnc\s+([\w.\-]+)\s+(\d{1,5})\b", re.I)
+_HP = re.compile(r"\b((?:\d{1,3}\.){3}\d{1,3}|[a-z0-9\-]+\.[a-z0-9.\-]+):(\d{1,5})\b", re.I)
+_URL = re.compile(r"https?://[^\s\"'<>)\]]+", re.I)
+
+
+def extract_targets(text: str) -> list[tuple]:
+    """Find nc host:port services and URLs mentioned in a briefing.
+    Returns de-duplicated [(kind, host_or_url, port)]."""
+    out, seen = [], set()
+
+    def add(item):
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+
+    for m in _NC.finditer(text or ""):
+        add(("netcat", m.group(1), int(m.group(2))))
+    for m in _HP.finditer(text or ""):
+        add(("netcat", m.group(1), int(m.group(2))))
+    for m in _URL.finditer(text or ""):
+        add(("url", m.group(0).rstrip(".,"), 0))
+    return out
+
 
 @dataclass
 class Target:
