@@ -183,6 +183,29 @@ def get_writeup(solve_id: str) -> str:
         return ""
 
 
+def get_event(event_id: str) -> dict | None:
+    return next((e for e in _load()["events"] if e["id"] == event_id), None)
+
+
+def event_writeup(event_id: str) -> tuple[str, str]:
+    """Combine every solve in an event into one master writeup. -> (name, md)."""
+    ev = get_event(event_id)
+    if not ev:
+        return ("", "")
+    n = len(ev["solves"])
+    md = [f"# {ev['name']} — CTF Writeups", "",
+          f"> {n} flag{'s' if n != 1 else ''} captured · created {ev['created']}", "",
+          "## Flags captured", ""]
+    for i, s in enumerate(ev["solves"], 1):
+        md.append(f"{i}. `{s['flag']}` — **{s['category']}** ({s['ts']})")
+    md += ["", "---", ""]
+    for s in ev["solves"]:
+        w = get_writeup(s["id"])
+        if w:
+            md += [w, "", ""]
+    return (ev["name"], "\n".join(md))
+
+
 def delete_event(event_id: str) -> bool:
     data = _load()
     n = len(data["events"])
