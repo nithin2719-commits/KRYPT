@@ -68,6 +68,28 @@ def triage(path: str, workdir: str) -> list[dict]:
     steps.append({"step": "preview", "summary": f"{len(data)} bytes",
                   "output": preview, "flags": scan_text(preview)})
 
+    # Esolang: Brainfuck (incl. reversed / "turnedaround" variants)
+    src = data.decode("latin-1", "replace")
+    bf = sum(1 for c in src if c in "><+-.,[]")
+    if bf >= 8 and bf / max(1, len(src.strip())) > 0.5:
+        py = sys.executable or "python3"
+        r = run([py, os.path.join(_SOLVERS, "brainfuck.py"), path], timeout=60)
+        if r.found and ("FORWARD" in r.stdout or "REVERSED" in r.stdout):
+            flags = scan_text(r.stdout)
+            # if the event's flag format is known, wrap the decoded output
+            fmt = os.environ.get("CTF_FLAG_FORMAT", "")
+            prefix = re.split(r"\\?\{", fmt)[0].replace("\\", "") if "{" in fmt else ""
+            for line in r.stdout.splitlines():
+                for tag in ("FORWARD:", "REVERSED:"):
+                    if line.startswith(tag):
+                        val = line[len(tag):].strip()
+                        if prefix and val and "{" not in val and 1 <= len(val) <= 120:
+                            flags.append({"flag": f"{prefix}{{{val}}}",
+                                          "kind": "custom", "confidence": 95})
+            steps.append({"step": "brainfuck",
+                          "summary": "executed Brainfuck (forward + reversed)",
+                          "output": r.stdout[:2000], "flags": flags})
+
     # Magic engine: BFS across all decoders + single-byte XOR brute.
     from ..decoders import magic
     m = magic(data)
