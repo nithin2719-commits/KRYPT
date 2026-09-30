@@ -67,6 +67,19 @@ def acrostics(text: str):
     return out
 
 
+def extract_all(text: str) -> list[tuple]:
+    """All hidden-message candidates as [(label, text)] — for in-process use."""
+    out = []
+    for t in zero_width(text):
+        if t.strip():
+            out.append(("zero-width", t))
+    for t in whitespace(text):
+        if t.strip():
+            out.append(("whitespace", t))
+    out += acrostics(text)
+    return out
+
+
 def main():
     if len(sys.argv) < 2:
         print("USAGE: textstego.py <file>")

@@ -107,12 +107,27 @@ def toolset_step(category: str) -> dict:
 
 
 def text_triage(text: str) -> list[dict]:
-    """Common/no-file pipeline: a pasted challenge is swept + magic-decoded."""
+    """Common/no-file pipeline: a pasted challenge is swept, checked for
+    hidden-text tricks, and magic-decoded."""
     steps: list[dict] = []
     fl = scan_text(text)
     steps.append({"step": "briefing-scan",
                   "summary": f"{len(fl)} flag candidate(s) in the text",
                   "output": text[:2000], "flags": fl})
+
+    # hidden-in-text: acrostics / capitals / zero-width / whitespace
+    try:
+        from .solvers.textstego import extract_all
+        hidden = extract_all(text)
+        if hidden:
+            body = "\n".join(f"{label}: {t[:200]}" for label, t in hidden)
+            steps.append({"step": "text-stego",
+                          "summary": "hidden-message extraction "
+                                     "(acrostic / capitals / zero-width / whitespace)",
+                          "output": body, "flags": scan_text(body)})
+    except Exception:
+        pass
+
     m = magic(text.encode("utf-8", "replace"))
     if m["found"]:
         steps.append({"step": "magic-decode",
