@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KRYPT</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23000'/><rect x='1.5' y='1.5' width='29' height='29' rx='5' fill='none' stroke='%23fff' stroke-width='1.5'/><text x='16' y='23' font-family='monospace' font-size='19' font-weight='bold' text-anchor='middle' fill='%23fff'>K</text></svg>">
+<style>
+  :root{
+    --bg:#000000; --surface:#0b0b0c; --surface2:#0f0f11; --raise:#161618;
+    --fg:#f5f5f6; --fg2:#cfcfd3; --dim:#8b8b92; --muted:#56565c;
+    --line:rgba(255,255,255,.12); --line2:rgba(255,255,255,.24);
+    --danger:#ffffff; --danger-2:#e6e6e8; --danger-deep:#8a8a8a;
+    --display:"Orbitron","Rajdhani",system-ui,sans-serif;
+    --mono:"JetBrains Mono","JetBrainsMono Nerd Font",ui-monospace,"Fira Code",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    font-family:var(--mono); color:var(--fg); background:var(--bg);
+    position:relative; min-height:100vh; overflow-x:hidden;
+    display:flex; flex-direction:column;
+  }
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);
+    background-size:44px 44px;
+    -webkit-mask:linear-gradient(180deg,transparent 0,#000 24%,#000 76%,transparent 100%);
+            mask:linear-gradient(180deg,transparent 0,#000 24%,#000 76%,transparent 100%);}
+  body::after{content:"";position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.55;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.35) 0 1px,transparent 1px 3px)}
+  /* vertically centered when idle, scroll-safe; top-aligned once results show */
+  .wrap{position:relative;z-index:2;width:100%;max-width:1080px;margin:auto;padding:40px 26px}
+  body.has-results .wrap{margin-block:30px}
+
+  /* ---------- boot intro (glitch) ---------- */
+  #boot{position:fixed;inset:0;z-index:50;background:#000;display:flex;align-items:center;justify-content:center;
+    transition:opacity .55s ease;overflow:hidden}
+  #boot.done{opacity:0;pointer-events:none}
+  #boot .core{width:min(600px,88vw);position:relative;z-index:3;text-align:center}
+  .glitch{position:relative;display:inline-block;font-family:var(--display);font-weight:900;
+    font-size:clamp(42px,8vw,74px);letter-spacing:.14em;color:#fff;
+    text-shadow:0 0 12px rgba(255,255,255,.22);
+    margin-bottom:24px;animation:gjit .34s steps(2) infinite}
+  .glitch::before,.glitch::after{content:attr(data-text);position:absolute;inset:0;overflow:hidden;pointer-events:none;mix-blend-mode:screen}
+  .glitch::before{color:#ffffff;left:2px;text-shadow:-2px 0 rgba(255,255,255,.8);clip-path:inset(0 0 55% 0);animation:gl1 2.1s infinite linear alternate-reverse}
+  .glitch::after{color:#c8c8c8;left:-2px;text-shadow:2px 0 rgba(255,255,255,.8);clip-path:inset(55% 0 0 0);animation:gl2 1.7s infinite linear alternate}
+  .glitch.scramble{animation:gjit .1s steps(2) infinite}
+  @keyframes gjit{0%{transform:translate(0,0)}50%{transform:translate(-1px,1px)}100%{transform:translate(1px,-1px)}}
+  @keyframes gl1{0%{clip-path:inset(8% 0 78% 0)}15%{clip-path:inset(48% 0 33% 0)}30%{clip-path:inset(20% 0 62% 0)}45%{clip-path:inset(70% 0 12% 0)}60%{clip-path:inset(35% 0 50% 0)}80%{clip-path:inset(60% 0 20% 0)}100%{clip-path:inset(15% 0 70% 0)}}
+  @keyframes gl2{0%{clip-path:inset(75% 0 8% 0)}15%{clip-path:inset(30% 0 55% 0)}30%{clip-path:inset(62% 0 20% 0)}45%{clip-path:inset(12% 0 74% 0)}60%{clip-path:inset(50% 0 33% 0)}80%{clip-path:inset(22% 0 60% 0)}100%{clip-path:inset(68% 0 15% 0)}}
+  #boot pre{font-family:var(--mono);font-size:12.5px;line-height:1.75;color:var(--dim);margin:0 auto;white-space:pre-wrap;text-align:left;display:inline-block;min-height:130px}
+  #boot .ok{color:#fff}
+  #boot .grant{color:#ffffff;text-shadow:0 0 12px rgba(255,255,255,.6);font-weight:700}
+  #boot .bootbar{height:2px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin:20px auto 0;width:70%}
+  #boot .bootbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffffff,#fff,#c8c8c8);
+    box-shadow:0 0 12px rgba(255,255,255,.6);transition:width .18s linear}
+  #boot .skip{text-align:center;color:var(--muted);font-size:10px;letter-spacing:2px;margin-top:16px}
+  #boot .noise{position:absolute;inset:-20px;z-index:1;opacity:.05;pointer-events:none;animation:nz .38s steps(3) infinite;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")}
+  @keyframes nz{0%{transform:translate(0,0)}33%{transform:translate(-7px,5px)}66%{transform:translate(6px,-6px)}100%{transform:translate(-3px,3px)}}
+  #boot::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.4) 0 1px,transparent 1px 3px)}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:40px}
+  .brand{font-family:var(--display);font-weight:900;font-size:30px;letter-spacing:11px;color:#fff;
+    display:flex;align-items:center;line-height:1;text-shadow:0 0 22px rgba(255,255,255,.28)}
+  .brand .gtxt{position:relative;display:inline-block}
+  .brand .gtxt::before,.brand .gtxt::after{content:attr(data-text);position:absolute;inset:0;overflow:hidden;pointer-events:none;opacity:0;mix-blend-mode:screen}
+  .brand .gtxt::before{color:#ffffff;left:1.5px}
+  .brand .gtxt::after{color:#c8c8c8;left:-1.5px}
+  .brand .gtxt:hover::before,.brand .gtxt.hit::before{animation:hg1 .5s steps(3) 1}
+  .brand .gtxt:hover::after,.brand .gtxt.hit::after{animation:hg2 .5s steps(3) 1}
+  @keyframes hg1{0%,100%{opacity:0}20%{opacity:.85;clip-path:inset(8% 0 62% 0)}55%{opacity:.7;clip-path:inset(48% 0 22% 0)}80%{opacity:.8;clip-path:inset(28% 0 50% 0)}}
+  @keyframes hg2{0%,100%{opacity:0}25%{opacity:.85;clip-path:inset(66% 0 10% 0)}60%{opacity:.7;clip-path:inset(20% 0 58% 0)}85%{opacity:.8;clip-path:inset(52% 0 30% 0)}}
+  .brand .tag{font-family:var(--mono);font-weight:600;font-size:9.5px;letter-spacing:3px;color:var(--dim);
+    border:1px solid var(--line2);border-radius:4px;padding:3px 8px;margin-left:16px;text-shadow:none;align-self:center}
+
+  /* ---------- console ---------- */
+  .console{position:relative;background:linear-gradient(180deg,var(--surface),var(--surface2));
+    border:1px solid var(--line);border-radius:16px;padding:34px 32px;
+    box-shadow:0 28px 80px rgba(0,0,0,.72), inset 0 1px 0 rgba(255,255,255,.04)}
+  .console::before{content:"";position:absolute;inset:7px;pointer-events:none;
+    --s:18px;--t:2px;--c:rgba(255,255,255,.6);
+    background:
+      linear-gradient(var(--c),var(--c)) 0 0/var(--s) var(--t),
+      linear-gradient(var(--c),var(--c)) 0 0/var(--t) var(--s),
+      linear-gradient(var(--c),var(--c)) 100% 0/var(--s) var(--t),
+      linear-gradient(var(--c),var(--c)) 100% 0/var(--t) var(--s),
+      linear-gradient(var(--c),var(--c)) 0 100%/var(--s) var(--t),
+      linear-gradient(var(--c),var(--c)) 0 100%/var(--t) var(--s),
+      linear-gradient(var(--c),var(--c)) 100% 100%/var(--s) var(--t),
+      linear-gradient(var(--c),var(--c)) 100% 100%/var(--t) var(--s);
+    background-repeat:no-repeat}
+  .clabel{font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:4px;color:var(--fg2);
+    margin:0 0 20px;display:flex;align-items:center;gap:10px}
+  .clabel::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line2),transparent)}
+
+  .prompt{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .prompt .caret{color:var(--dim);font-weight:700;font-size:15px}
+  .field{width:100%;background:#050505;border:1px solid var(--line);color:var(--fg);font-family:var(--mono);
+    font-size:15px;padding:17px 18px;border-radius:10px;outline:none;transition:.16s}
+  .field:focus{border-color:var(--danger);box-shadow:0 0 0 1px rgba(255,255,255,.55),0 0 24px rgba(255,255,255,.18)}
+  .field::placeholder{color:var(--muted)}
+  #target{flex:1;min-width:230px}
+  .briefwrap{margin-top:20px}
+  .brieflabel{font-size:10px;letter-spacing:2px;color:var(--muted);margin:0 0 7px 2px}
+  .brieflabel b{color:var(--dim)}
+  #desc{display:block;min-height:104px;resize:vertical;line-height:1.55;font-size:14px}
+  .go{font-family:var(--display);font-weight:800;letter-spacing:2px;font-size:14px;
+    background:#fff;color:#000;border:none;padding:16px 26px;border-radius:10px;cursor:pointer;min-width:158px;
+    transition:.16s;box-shadow:0 0 22px rgba(255,255,255,.22)}
+  .go:hover:not(:disabled){box-shadow:0 0 34px rgba(255,255,255,.42)}
+  .go:active:not(:disabled){transform:translateY(1px)}
+  .go:disabled{cursor:progress}
+  .go.busy{background:#0e0e10;color:#fff;border:1px solid var(--line2);box-shadow:0 0 18px rgba(255,255,255,.18)}
+
+  /* engine selector */
+  .enginerow{display:flex;align-items:center;gap:14px;margin-top:22px;flex-wrap:wrap}
+  .englabel{font-size:10px;letter-spacing:2px;color:var(--muted)}
+  .engines{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .eng{font-family:var(--mono);font-size:11px;letter-spacing:.5px;color:var(--dim);background:transparent;border:0;
+    border-right:1px solid var(--line);padding:8px 13px;cursor:pointer;transition:.13s;white-space:nowrap}
+  .eng:last-child{border-right:0}
+  .eng:hover:not(:disabled){color:var(--fg);background:rgba(255,255,255,.04)}
+  .eng.sel{background:#fff;color:#000;font-weight:700}
+  .eng:disabled{color:#33333a;cursor:not-allowed}
+  .enghint{font-size:11px;color:var(--muted);margin-left:auto}
+  .cats{display:flex;flex-wrap:wrap;gap:7px}
+  .cat{font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;color:var(--dim);background:var(--surface);
+    border:1px solid var(--line);border-radius:7px;padding:6px 11px;cursor:pointer;transition:.12s;white-space:nowrap}
+  .cat:hover{color:var(--fg);border-color:var(--line2)}
+  .cat.sel{background:#fff;color:#000;font-weight:700;border-color:#fff}
+  .evfield{flex:1;min-width:220px;font-size:13px;padding:12px 14px}
+
+  /* vault button + overlay */
+  .vaultbtn{position:fixed;top:20px;right:24px;z-index:20;font-family:var(--display);font-weight:700;
+    font-size:11px;letter-spacing:2px;color:var(--fg);background:var(--surface);border:1px solid var(--line2);
+    border-radius:9px;padding:9px 14px;cursor:pointer;transition:.14s}
+  .vaultbtn:hover{box-shadow:0 0 16px rgba(255,255,255,.14);border-color:#fff}
+  .vaultbtn b{color:var(--dim);font-weight:700;margin-left:6px}
+  #vault{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.94);display:none;padding:34px 26px;overflow:auto}
+  #vault.open{display:block;animation:rise .25s ease both}
+  .vhead{display:flex;align-items:center;gap:14px;max-width:1180px;margin:0 auto 22px}
+  .vhead .vt{font-family:var(--display);font-weight:900;font-size:24px;letter-spacing:8px;color:#fff}
+  .vhead .vx{margin-left:auto;cursor:pointer;color:var(--dim);border:1px solid var(--line2);border-radius:8px;padding:8px 13px;font-size:12px}
+  .vhead .vx:hover{color:#fff;border-color:#fff}
+  .vgrid{display:grid;grid-template-columns:260px 1fr;gap:18px;max-width:1180px;margin:0 auto}
+  .vevents{display:flex;flex-direction:column;gap:9px}
+  .vev{border:1px solid var(--line);border-radius:10px;padding:13px 15px;cursor:pointer;background:var(--surface);transition:.13s}
+  .vev:hover{border-color:var(--line2)} .vev.sel{border-color:#fff;background:#111}
+  .vev .en{font-family:var(--display);font-weight:700;font-size:13px;color:#fff;letter-spacing:1px}
+  .vev .em{font-size:11px;color:var(--muted);margin-top:5px}
+  .vev .del{float:right;color:var(--muted);font-size:12px}.vev .del:hover{color:#fff}
+  .vsolves{display:flex;flex-direction:column;gap:10px;min-height:60px}
+  .vempty{color:var(--muted);font-size:13px;padding:20px;text-align:center;border:1px dashed var(--line);border-radius:10px}
+  .vsolve{border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;background:var(--surface);transition:.13s}
+  .vsolve:hover{border-color:var(--line2);box-shadow:0 0 14px rgba(255,255,255,.08)}
+  .vsolve .vf{font-family:var(--display);font-weight:700;font-size:15px;color:#fff;word-break:break-all}
+  .vsolve .vmeta{font-size:11px;color:var(--muted);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap}
+  .vsolve .vcat{color:var(--fg2);border:1px solid var(--line);border-radius:5px;padding:1px 7px}
+  #writeup{margin-top:16px;border:1px solid var(--line2);border-radius:12px;background:#050505;padding:20px 22px;
+    max-width:1180px;margin-left:auto;margin-right:auto;display:none}
+  #writeup.show{display:block;animation:rise .2s ease both}
+  #writeup h1{font-family:var(--display);font-size:18px;color:#fff;margin:0 0 12px;word-break:break-all}
+  #writeup h2{font-family:var(--display);font-size:12px;letter-spacing:2px;color:var(--fg2);margin:18px 0 8px;border-top:1px solid var(--line);padding-top:14px}
+  #writeup h3{font-size:13px;color:#fff;margin:12px 0 4px}
+  #writeup li{color:var(--fg2);font-size:13px;line-height:1.6}
+  #writeup code{color:#fff}
+  #writeup pre{background:#0b0b0c;border:1px solid var(--line);border-radius:8px;padding:11px 13px;overflow:auto;
+    font-size:12px;color:var(--fg2);white-space:pre-wrap;word-break:break-word}
+  #writeup .wtop{display:flex;gap:10px;margin-bottom:8px}
+  #writeup .wact{font-size:11px;color:var(--fg2);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+  #writeup .wact:hover{border-color:#fff;color:#fff}
+  @media (max-width:720px){.vgrid{grid-template-columns:1fr}}
+
+  .drop{margin-top:24px;border:1.5px dashed var(--line);border-radius:12px;padding:30px;text-align:center;
+    color:var(--muted);transition:.15s;cursor:pointer;background:rgba(255,255,255,.015);font-size:13px}
+  .drop.hot{border-color:var(--line2);color:var(--fg);background:rgba(255,255,255,.05);box-shadow:inset 0 0 34px rgba(255,255,255,.06)}
+  .drop b{color:var(--fg2)}
+  kbd{font-family:var(--mono);font-size:10px;color:var(--fg2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;background:#050505}
+
+  .scan{display:none;margin-top:18px;height:3px;border-radius:3px;overflow:hidden;background:#141416}
+  .scan.on{display:block}
+  .scan i{display:block;height:100%;width:34%;background:linear-gradient(90deg,transparent,var(--danger),#fff,transparent);
+    box-shadow:0 0 12px rgba(255,255,255,.6);animation:sweep 1.05s linear infinite}
+  @keyframes sweep{0%{transform:translateX(-120%)}100%{transform:translateX(360%)}}
+  .scanmsg{display:none;margin-top:11px;font-size:12px;color:var(--dim);letter-spacing:.4px}
+  .scanmsg.on{display:block}
+  .scanmsg b{color:#fff;font-weight:700}
+
+  /* ---------- results ---------- */
+  #out{margin-top:26px;display:none}
+  #out.in{animation:rise .3s ease both}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .stat{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .stat .n{font-family:var(--display);font-weight:800;font-size:24px;line-height:1;color:var(--fg)}
+  .stat .l{font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:6px}
+  .stat.hit{border-color:var(--line2)}
+  .stat.hit .n{color:#fff;text-shadow:0 0 18px rgba(255,255,255,.45)}
+  .resbar{display:flex;gap:9px;margin-bottom:14px;flex-wrap:wrap}
+  .act{font-size:11px;color:var(--fg2);border:1px solid var(--line);background:var(--surface);padding:5px 11px;border-radius:7px;cursor:pointer;letter-spacing:.5px;transition:.12s;font-family:var(--mono)}
+  .act:hover{border-color:var(--line2);box-shadow:0 0 10px rgba(255,255,255,.12)}
+  .capture{border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.01));box-shadow:0 0 30px rgba(255,255,255,.1)}
+  .cap-head{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:3px;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--line2);background:rgba(255,255,255,.03)}
+  .cap-head .xh{font-size:18px;animation:spin 5s linear infinite;display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .cap-head .cnt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:1px}
+  .flist{padding:12px 14px}
+  .flag{background:#070707;border:1px solid var(--line);border-radius:9px;padding:13px 15px;margin:9px 0;cursor:pointer;transition:.13s;animation:rise .3s ease both}
+  .flag:hover{border-color:var(--line2);box-shadow:0 0 16px rgba(255,255,255,.12)}
+  .flag:active{transform:scale(.996)}
+  .flag .top{display:flex;align-items:center;gap:12px}
+  .flag .val{font-family:var(--display);font-weight:700;font-size:18px;color:#fff;flex:1;word-break:break-all;text-shadow:0 0 12px rgba(255,255,255,.3)}
+  .flag .cp{font-size:10px;color:var(--fg);border:1px solid var(--line2);padding:4px 9px;border-radius:6px;letter-spacing:1px;white-space:nowrap}
+  .flag .fmeta{font-size:11px;color:var(--muted);margin-top:8px;display:flex;align-items:center;gap:8px}
+  .bar{flex:1;height:4px;background:#151517;border-radius:3px;overflow:hidden;max-width:180px}
+  .bar i{display:block;height:100%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,.5)}
+  .miss-panel{border:1px dashed rgba(255,255,255,.5);border-radius:14px;padding:16px 18px;background:rgba(255,255,255,.04);box-shadow:0 0 26px rgba(255,255,255,.08)}
+  .miss-panel h3{font-family:var(--display);font-weight:800;font-size:14px;letter-spacing:3px;color:var(--danger);margin:0 0 8px}
+  .miss-panel p{margin:0;color:var(--dim);font-size:13px;line-height:1.6}.miss-panel code{color:var(--fg)}
+  .chips{display:flex;gap:9px;flex-wrap:wrap;margin:16px 0 12px}
+  .mchip{font-size:11px;color:var(--dim);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:6px 11px}
+  .mchip .k{color:var(--muted);letter-spacing:1px;margin-right:6px;font-size:10px}.mchip b{color:var(--fg);font-weight:600}
+  .seclabel{font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:4px;color:var(--dim);margin:20px 2px 10px;display:flex;align-items:center;gap:9px}
+  .seclabel::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+  .step{border:1px solid var(--line);border-radius:10px;margin:9px 0;background:var(--surface);overflow:hidden;transition:.13s}
+  .step[open]{border-color:var(--line2)}
+  .step summary{cursor:pointer;list-style:none;padding:12px 14px;display:flex;gap:11px;align-items:center}
+  .step summary::-webkit-details-marker{display:none}
+  .step .sev{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+  .step .sev.hot{background:#fff;box-shadow:0 0 10px rgba(255,255,255,.7)}
+  .step .nm{color:var(--fg);font-weight:700;font-size:13px}
+  .step .sm{color:var(--muted);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .step .badge{font-family:var(--display);font-size:10px;font-weight:700;letter-spacing:1px;color:#000;background:#fff;padding:2px 9px;border-radius:20px;flex:none}
+  .step pre{margin:0;padding:13px 15px;border-top:1px solid var(--line);background:#050505;color:var(--fg2);font-size:12.5px;line-height:1.55;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+  .agent{margin-top:18px;border:1px solid var(--line2);border-radius:11px;padding:15px 17px;background:rgba(255,255,255,.03)}
+  .agent h3{font-family:var(--display);font-weight:700;letter-spacing:2px;margin:0 0 9px;color:var(--fg);font-size:12px}
+  .agent .hnote{color:var(--dim);font-size:12px;line-height:1.55;margin-bottom:11px}
+  .cmdbox{display:flex;align-items:center;gap:10px;background:#050505;border:1px solid var(--line);border-radius:8px;padding:11px 13px}
+  .cmdbox code{flex:1;color:var(--fg);font-size:12.5px;word-break:break-all;line-height:1.5}
+  .err{color:var(--danger-2);border:1px solid var(--danger);border-radius:10px;padding:14px;margin-top:16px;background:rgba(255,255,255,.07)}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:9;background:#fff;color:#000;font-weight:700;padding:10px 20px;border-radius:9px;opacity:0;transition:.2s;box-shadow:0 0 26px rgba(255,255,255,.4);font-size:13px}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  footer{margin-top:34px;color:var(--muted);font-size:11px;text-align:center;line-height:1.8}
+  footer code{color:var(--dim)}
+  @media (max-width:600px){
+    .wrap{padding:20px 13px}.brand{font-size:22px;letter-spacing:5px}.brand .tag{display:none}
+    .go{flex:1}.enghint{display:none}.flag .val{font-size:16px}#boot .logo{font-size:30px;letter-spacing:9px}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms !important;animation-iteration-count:1 !important}}
+</style>
+</head>
+<body>
+<div id="boot">
+  <div class="noise"></div>
+  <div class="core">
+    <div class="glitch" id="glitch" data-text="KRYPT">KRYPT</div>
+    <pre id="bootlog"></pre>
+    <div class="bootbar"><i id="bootfill"></i></div>
+    <div class="skip">CLICK OR PRESS ANY KEY TO SKIP</div>
+  </div>
+</div>
+
+<button class="vaultbtn" id="vaultbtn" title="Your saved events, flags &amp; writeups">◆ VAULT<b id="vaultn">0</b></button>
+<div class="wrap">
+  <header><div class="brand"><span class="gtxt" id="brandglitch" data-text="KRYPT">KRYPT</span><span class="tag">FLAG HUNTER</span></div></header>
+
+  <div class="console">
+    <div class="clabel">TARGET ACQUISITION</div>
+    <div class="prompt">
+      <span class="caret">▶</span>
+      <input id="target" class="field" autofocus spellcheck="false"
+             placeholder="file path   ·   https://target/chal   ·   host:port">
+      <button class="go" id="go">HUNT</button>
+    </div>
+    <div class="briefwrap">
+      <div class="brieflabel">CHALLENGE BRIEFING — prompt, hints, flag format, <b>or the whole challenge</b> (OSINT / cipher / misc). HUNT works with just this, no file needed.</div>
+      <textarea id="desc" class="field" spellcheck="false"
+        placeholder="e.g. 'The server leaks memory. Flag format: FLAG{...}. Author says look at the stack.'"></textarea>
+    </div>
+    <div class="enginerow">
+      <span class="englabel">EVENT</span>
+      <input id="event" class="field evfield" list="eventlist" spellcheck="false"
+             placeholder="name this CTF (e.g. picoCTF 2026) — captured flags auto-save to your Vault">
+      <datalist id="eventlist"></datalist>
+    </div>
+    <div class="enginerow" style="align-items:flex-start">
+      <span class="englabel" style="padding-top:6px">DOMAIN</span>
+      <div class="cats" id="cats">
+        <button class="cat sel" data-cat="auto">AUTO</button>
+        <button class="cat" data-cat="pwn">PWN</button>
+        <button class="cat" data-cat="rev">REV</button>
+        <button class="cat" data-cat="web">WEB</button>
+        <button class="cat" data-cat="crypto">CRYPTO</button>
+        <button class="cat" data-cat="forensics">FORENSICS</button>
+        <button class="cat" data-cat="stego">STEGO</button>
+        <button class="cat" data-cat="osint">OSINT</button>
+        <button class="cat" data-cat="network">NETWORK</button>
+        <button class="cat" data-cat="misc">MISC</button>
+      </div>
+    </div>
+    <div class="enginerow">
+      <span class="englabel">ENGINE</span>
+      <div class="engines" id="engines">
+        <button class="eng sel" data-eng="off">TRIAGE</button>
+        <button class="eng" data-eng="local" data-need="ollama">LOCAL · GPU</button>
+        <button class="eng" data-eng="claude" data-need="claude">CLAUDE · MCP</button>
+        <button class="eng" data-eng="agy" data-need="agy">AGY · MCP</button>
+      </div>
+      <span class="enghint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> hunt · <kbd>Esc</kbd> clear</span>
+    </div>
+    <div class="drop" id="drop">⇩ &nbsp;drop a challenge file to scan &nbsp;<b>binary · image · pcap · archive · cipher</b></div>
+    <div class="scan" id="scan"><i></i></div>
+    <div class="scanmsg" id="scanmsg"></div>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>authorized CTF use only · triage front-loads the cheap wins · deep work → hexstrike-ai · ghidra MCP · <code>/cybersec-ctf</code></footer>
+</div>
+<div id="vault">
+  <div class="vhead"><span class="vt">VAULT</span>
+    <span style="color:var(--muted);font-size:12px">saved events · flags · writeups</span>
+    <span class="vx" id="vaultclose">✕ CLOSE</span></div>
+  <div class="vgrid">
+    <div class="vevents" id="vevents"></div>
+    <div><div class="vsolves" id="vsolves"><div class="vempty">Select an event.</div></div>
+      <div id="writeup"></div></div>
+  </div>
+</div>
+<div class="toast" id="toast">copied</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const out=$("#out"), scan=$("#scan"), go=$("#go"), scanmsg=$("#scanmsg");
+const GO_LABEL=go.textContent;
+let ENGINE="off", CATEGORY="auto";
+
+/* ---- boot intro (glitch + decrypt scramble) ---- */
+(function(){
+  const boot=$("#boot"), log=$("#bootlog"), g=$("#glitch"), fill=$("#bootfill");
+  const lines=["> krypt v1.0 — spectral flag hunter","> decrypting core ............ <ok>online</ok>",
+    "> decoders · stego · crack · recurse <ok>loaded</ok>","> ghidra bridge .............. <ok>linked</ok>",
+    "> rockyou / seclists ......... <ok>ready</ok>","> mcp agents · claude · agy .. <ok>armed</ok>",
+    "> ACCESS <grant>GRANTED</grant>"];
+  const paint=s=>s.replace(/<ok>(.*?)<\/ok>/g,'<span class="ok">$1</span>').replace(/<grant>(.*?)<\/grant>/g,'<span class="grant">$1</span>');
+  const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  let done=false;
+  function finish(){if(done)return;done=true;boot.classList.add("done");setTimeout(()=>boot&&boot.remove(),560);const t=$("#target");if(t)t.focus();}
+  boot.addEventListener("click",finish); addEventListener("keydown",finish,{once:true});
+
+  /* decrypt-scramble the wordmark into KRYPT */
+  if(!reduce){
+    const target="KRYPT", glyphs="#%&$@!?/\\|<>=+*0123456789ABCDEFﾊﾋﾌﾍﾎ", frames=18;
+    g.classList.add("scramble");
+    let f=0; const scr=setInterval(()=>{
+      let s=""; const lock=(f/frames)*target.length;
+      for(let i=0;i<target.length;i++) s+= i<lock ? target[i] : glyphs[Math.floor(Math.random()*glyphs.length)];
+      g.textContent=s; g.setAttribute("data-text",s); f++;
+      if(f>frames){clearInterval(scr);g.textContent=target;g.setAttribute("data-text",target);g.classList.remove("scramble");}
+    },42);
+  }
+
+  if(reduce){log.innerHTML=lines.map(paint).join("\n");fill.style.width="100%";setTimeout(finish,320);return;}
+  let i=0;(function next(){
+    if(i>=lines.length){setTimeout(finish,560);return;}
+    log.innerHTML+=paint(lines[i])+"\n"; i++; fill.style.width=Math.round(i/lines.length*100)+"%";
+    setTimeout(next,i>=lines.length?0:195);
+  })();
+})();
+
+/* ---- health: configure which engines are available ---- */
+fetch("/api/health").then(r=>r.json()).then(h=>{
+  const avail={ollama:!!h.ollama, claude:!!(h.engines&&h.engines.claude), agy:!!(h.engines&&h.engines.agy)};
+  document.querySelectorAll(".eng[data-need]").forEach(b=>{
+    const need=b.dataset.need;
+    if(!avail[need]){b.disabled=true;b.title=need+" not available";}
+    else if(need==="ollama"){b.textContent="LOCAL · "+h.ollama.split("/").pop().replace(/:latest$/,"");}
+  });
+}).catch(()=>{});
+
+/* ---- engine selector ---- */
+$("#engines").addEventListener("click",e=>{
+  const b=e.target.closest(".eng"); if(!b||b.disabled)return;
+  document.querySelectorAll(".eng").forEach(x=>x.classList.remove("sel"));
+  b.classList.add("sel"); ENGINE=b.dataset.eng;
+});
+/* ---- domain selector ---- */
+$("#cats").addEventListener("click",e=>{
+  const b=e.target.closest(".cat"); if(!b)return;
+  document.querySelectorAll(".cat").forEach(x=>x.classList.remove("sel"));
+  b.classList.add("sel"); CATEGORY=b.dataset.cat;
+});
+/* ---- periodic header glitch ---- */
+(function(){const g=$("#brandglitch");if(!g)return;
+  setInterval(()=>{g.classList.add("hit");setTimeout(()=>g.classList.remove("hit"),520);},4200);})();
+
+/* ---- helpers ---- */
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1200);}
+function copy(v){navigator.clipboard.writeText(v).then(()=>toast("copied  "+v.slice(0,34)));}
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+window.__cp=copy;
+
+/* ---- render ---- */
+function render(res){
+  document.body.classList.add("has-results");
+  if(res.error){out.innerHTML='<div class="err">✖ '+esc(res.error)+'</div>';out.style.display="block";return;}
+  const t=res.target||{}, flags=res.flags||[], steps=res.steps||[];
+  const kind=esc(t.kind||"?")+(t.subkind?(" / "+esc(t.subkind)):"");
+  let h="";
+  h+='<div class="stats">'
+    +'<div class="stat '+(flags.length?"hit":"")+'"><div class="n">'+flags.length+'</div><div class="l">FLAGS</div></div>'
+    +'<div class="stat"><div class="n">'+steps.length+'</div><div class="l">STEPS RUN</div></div>'
+    +'<div class="stat"><div class="n" style="font-size:15px;padding-top:5px">'+kind.toUpperCase()+'</div><div class="l">VECTOR</div></div></div>';
+  h+='<div class="resbar">';
+  if(flags.length)h+='<span class="act" id="copyall">⧉ COPY ALL FLAGS</span>';
+  if(steps.length)h+='<span class="act" id="expandall">⊕ EXPAND</span><span class="act" id="collapseall">⊖ COLLAPSE</span>';
+  h+='</div>';
+  if(flags.length){
+    h+='<div class="capture"><div class="cap-head"><span class="xh">⊕</span>FLAG CAPTURED<span class="cnt">'+flags.length+' candidate'+(flags.length>1?"s":"")+'</span></div><div class="flist">';
+    flags.forEach(f=>{h+='<div class="flag" onclick=\'window.__cp('+JSON.stringify(f.flag)+')\'><div class="top"><span class="val">'+esc(f.flag)+'</span><span class="cp">COPY</span></div>'
+      +'<div class="fmeta"><span>CONF '+f.confidence+'</span>·<span>'+esc(f.kind)+'</span>·<span>via '+esc(f.source||"?")+'</span><span class="bar"><i style="width:'+Math.min(100,f.confidence)+'%"></i></span></div></div>';});
+    h+='</div></div>';
+  }else{
+    h+='<div class="miss-panel"><h3>◈ NO FLAG — ESCALATE</h3><p>First-pass triage ran clean. Switch ENGINE to <code>CLAUDE·MCP</code> or <code>AGY·MCP</code> to unleash a tool-driving agent, or escalate manually via ghidra / hexstrike.</p></div>';
+  }
+  h+='<div class="chips"><span class="mchip"><span class="k">TARGET</span><b>'+esc(t.raw||"")+'</b></span>'
+    +(t.mime?'<span class="mchip"><span class="k">MIME</span><b>'+esc(t.mime)+'</b></span>':'')
+    +'<span class="mchip"><span class="k">WORKDIR</span><b>'+esc(t.workdir||res.workdir||"")+'</b></span></div>';
+  if(res.handoff&&res.handoff.command){
+    h+='<div class="agent"><h3>◇ '+esc((res.handoff.provider||"agent").toUpperCase())+' · MCP DEEP HUNT — READY</h3>'
+      +'<div class="hnote">'+esc(res.handoff.note||"")+'</div>'
+      +'<div class="cmdbox"><code>'+esc(res.handoff.command)+'</code>'
+      +'<span class="act" onclick=\'window.__cp('+JSON.stringify(res.handoff.command)+')\'>COPY</span></div></div>';
+  }
+  if(steps.length){
+    h+='<div class="seclabel">TRIAGE LOG</div>';
+    steps.forEach(s=>{const nf=(s.flags||[]).length;
+      h+='<details class="step"'+(nf?" open":"")+'><summary><span class="sev'+(nf?" hot":"")+'"></span><span class="nm">'+esc(s.step)+'</span><span class="sm">'+esc(s.summary||"")+'</span>'
+        +(nf?'<span class="badge">'+nf+' FLAG</span>':'')+'</summary>'+(s.output&&s.output.trim()?'<pre>'+esc(s.output)+'</pre>':'')+'</details>';});
+  }
+  out.innerHTML=h;out.style.display="block";
+  out.classList.remove("in");void out.offsetWidth;out.classList.add("in");
+  const ca=$("#copyall");if(ca)ca.onclick=()=>copy(flags.map(f=>f.flag).join("\n"));
+  const ea=$("#expandall");if(ea)ea.onclick=()=>out.querySelectorAll("details.step").forEach(d=>d.open=true);
+  const la=$("#collapseall");if(la)la.onclick=()=>out.querySelectorAll("details.step").forEach(d=>d.open=false);
+  out.scrollIntoView({behavior:"smooth",block:"start"});
+  // vault auto-save feedback
+  if(res.saved&&res.saved.solve_id){toast("★ saved to Vault + writeup");refreshVaultCount();}
+  else if(res.saved&&res.saved.duplicate){toast("already in Vault");}
+}
+
+/* ---- run ---- */
+let _timer=null;
+function busy(b,deep){
+  go.disabled=b;go.classList.toggle("busy",b);scan.classList.toggle("on",b);scanmsg.classList.toggle("on",b);
+  if(b){out.style.display="none";go.textContent=deep?"PREPARING":"HUNTING";
+    const t0=Date.now();
+    const msg=deep?'triage + preparing MCP agent hand-off · <b>{s}s</b>…':'hunting · <b>{s}s</b> · decoders · stego · crack · recurse…';
+    const tick=()=>{scanmsg.innerHTML=msg.replace("{s}",((Date.now()-t0)/1000).toFixed(1));};
+    tick();clearInterval(_timer);_timer=setInterval(tick,100);
+  }else{clearInterval(_timer);go.textContent=GO_LABEL;}
+}
+async function hunt(target,file){
+  const desc=$("#desc").value, ev=$("#event").value.trim(), deep=(ENGINE==="claude"||ENGINE==="agy");
+  if(ev){try{localStorage.setItem("krypt_event",ev);}catch(e){}}
+  busy(true,deep);
+  try{
+    if(file){
+      const url="/api/upload?category="+CATEGORY+"&event="+encodeURIComponent(ev)+"&desc="+encodeURIComponent(desc);
+      const r=await fetch(url,{method:"POST",
+        headers:{"X-Filename":file.name,"X-Ai":ENGINE==="local"?"1":"0","Content-Type":"application/octet-stream"},body:file});
+      const res=await r.json(); render(res);
+      if(deep&&!(res.flags&&res.flags.length)&&res.target&&res.target.raw){
+        busy(true,true); const dr=await fetch("/api/deep",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({target:res.target.raw,description:desc,provider:ENGINE,category:CATEGORY,event:ev})}); render(await dr.json());
+      }
+    }else{
+      const ep=deep?"/api/deep":"/api/solve";
+      const body=deep?{target:target||"",description:desc,provider:ENGINE,category:CATEGORY,event:ev}
+                     :{target:target||"",description:desc,ai:ENGINE==="local",category:CATEGORY,event:ev};
+      const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      render(await r.json());
+    }
+  }catch(e){render({error:String(e)});}
+  busy(false);
+}
+/* HUNT works with a target OR just a briefing (no-file / common box) */
+function solveTarget(){const v=$("#target").value.trim(),d=$("#desc").value.trim();if(v||d)hunt(v||null,null);}
+go.onclick=solveTarget;
+function onKey(e){
+  if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();solveTarget();}
+  else if(e.key==="Enter"&&e.target.id==="target"&&!e.shiftKey){e.preventDefault();solveTarget();}
+  else if(e.key==="Escape"){$("#target").value="";$("#desc").value="";out.style.display="none";document.body.classList.remove("has-results");}
+}
+$("#target").addEventListener("keydown",onKey); $("#desc").addEventListener("keydown",onKey);
+
+/* drag & drop */
+const drop=$("#drop"), fi=document.createElement("input"); fi.type="file";
+drop.onclick=()=>fi.click(); fi.onchange=()=>fi.files[0]&&hunt(null,fi.files[0]);
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("hot");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("hot");}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f)hunt(null,f);});
+addEventListener("dragover",e=>e.preventDefault()); addEventListener("drop",e=>e.preventDefault());
+
+/* ---- VAULT: events · flags · writeups ---- */
+let VAULT_DATA={events:[]}, VSEL=null;
+async function loadVault(){
+  try{VAULT_DATA=await (await fetch("/api/events")).json();}catch(e){VAULT_DATA={events:[]};}
+  // datalist of existing event names + total solve count
+  const dl=$("#eventlist"); if(dl) dl.innerHTML=VAULT_DATA.events.map(e=>'<option value="'+esc(e.name)+'">').join("");
+  refreshVaultCount();
+}
+function refreshVaultCount(){
+  fetch("/api/events").then(r=>r.json()).then(d=>{
+    VAULT_DATA=d; const n=d.events.reduce((a,e)=>a+e.solves.length,0);
+    const el=$("#vaultn"); if(el) el.textContent=n;
+    const dl=$("#eventlist"); if(dl) dl.innerHTML=d.events.map(e=>'<option value="'+esc(e.name)+'">').join("");
+  }).catch(()=>{});
+}
+function renderEvents(){
+  const box=$("#vevents");
+  if(!VAULT_DATA.events.length){box.innerHTML='<div class="vempty">No events yet.<br>Name a CTF in the EVENT box and hunt — solves save here.</div>';return;}
+  box.innerHTML=VAULT_DATA.events.map(e=>
+    '<div class="vev'+(VSEL===e.id?" sel":"")+'" data-id="'+e.id+'">'
+    +'<span class="del" data-del="'+e.id+'" title="delete event">✕</span>'
+    +'<div class="en">'+esc(e.name)+'</div>'
+    +'<div class="em">'+e.solves.length+' flag'+(e.solves.length!==1?"s":"")+' · '+esc(e.created)+'</div></div>').join("");
+}
+function renderSolves(){
+  const ev=VAULT_DATA.events.find(e=>e.id===VSEL);
+  const box=$("#vsolves"); $("#writeup").classList.remove("show");
+  if(!ev){box.innerHTML='<div class="vempty">Select an event.</div>';return;}
+  if(!ev.solves.length){box.innerHTML='<div class="vempty">No flags captured in this event yet.</div>';return;}
+  box.innerHTML=ev.solves.slice().reverse().map(s=>
+    '<div class="vsolve" data-wid="'+s.id+'"><div class="vf">'+esc(s.flag)+'</div>'
+    +'<div class="vmeta"><span class="vcat">'+esc((s.category||"?").toUpperCase())+'</span>'
+    +'<span>'+esc(s.engine||"triage")+'</span><span>'+esc(s.ts)+'</span>'
+    +'<span style="color:var(--fg2)">'+esc((s.target||"").split("/").pop()||"—")+'</span></div></div>').join("");
+}
+function mdlite(md){
+  const parts=md.split(/```/); let out="";
+  parts.forEach((seg,i)=>{
+    if(i%2){out+="<pre>"+esc(seg.replace(/^\n/,""))+"</pre>";return;}
+    seg.split("\n").forEach(line=>{
+      if(/^# /.test(line))out+="<h1>"+esc(line.slice(2))+"</h1>";
+      else if(/^## /.test(line))out+="<h2>"+esc(line.slice(3))+"</h2>";
+      else if(/^### /.test(line))out+="<h3>"+esc(line.slice(4))+"</h3>";
+      else if(/^- /.test(line))out+="<li>"+esc(line.slice(2)).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>")+"</li>";
+      else if(line.trim())out+="<div>"+esc(line).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>")+"</div>";
+    });
+  });
+  return out;
+}
+async function showWriteup(wid){
+  const w=$("#writeup"); w.innerHTML="loading…"; w.classList.add("show");
+  try{
+    const d=await (await fetch("/api/writeup?id="+wid)).json();
+    w.innerHTML='<div class="wtop"><span class="wact" id="wcopy">⧉ COPY MARKDOWN</span></div>'+mdlite(d.writeup||"(empty)");
+    const wc=$("#wcopy"); if(wc) wc.onclick=()=>copy(d.writeup||"");
+    w.scrollIntoView({behavior:"smooth",block:"nearest"});
+  }catch(e){w.innerHTML='<div class="vempty">could not load writeup</div>';}
+}
+$("#vaultbtn").onclick=async()=>{await loadVault();renderEvents();
+  if(!VSEL&&VAULT_DATA.events.length)VSEL=VAULT_DATA.events[0].id;
+  renderEvents();renderSolves();$("#vault").classList.add("open");};
+$("#vaultclose").onclick=()=>$("#vault").classList.remove("open");
+$("#vevents").addEventListener("click",async e=>{
+  const del=e.target.closest("[data-del]");
+  if(del){e.stopPropagation(); if(confirm("Delete this event and its writeups?")){
+    await fetch("/api/event/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event_id:del.dataset.del})});
+    VSEL=null; await loadVault(); renderEvents(); renderSolves();} return;}
+  const ev=e.target.closest(".vev"); if(ev){VSEL=ev.dataset.id;renderEvents();renderSolves();}
+});
+$("#vsolves").addEventListener("click",e=>{const s=e.target.closest("[data-wid]");if(s)showWriteup(s.dataset.wid);});
+addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#vault").classList.contains("open"))$("#vault").classList.remove("open");});
+// restore last event name + initial count
+try{const le=localStorage.getItem("krypt_event"); if(le)$("#event").value=le;}catch(e){}
+loadVault();
+
+/* deep-link: /?t=<target>&d=<desc>&e=<engine>&c=<category>&ev=<event> */
+(function(){const p=new URLSearchParams(location.search),tv=p.get("t");
+  if(p.get("d"))$("#desc").value=p.get("d");
+  if(p.get("ev"))$("#event").value=p.get("ev");
+  if(p.get("c")){const b=document.querySelector('.cat[data-cat="'+p.get("c")+'"]');if(b)b.click();}
+  if(p.get("e")){const b=document.querySelector('.eng[data-eng="'+p.get("e")+'"]');if(b&&!b.disabled)b.click();}
+  if(p.get("vault")==="1"){setTimeout(()=>$("#vaultbtn").click(),300);}
+  if(tv){$("#target").value=tv;solveTarget();}})();
+</script>
+</body>
+</html>
