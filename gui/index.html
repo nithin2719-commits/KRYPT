@@ -244,6 +244,12 @@
   .cmdbox{display:flex;align-items:center;gap:10px;background:#050505;border:1px solid var(--line);border-radius:8px;padding:11px 13px}
   .cmdbox code{flex:1;color:var(--fg);font-size:12.5px;word-break:break-all;line-height:1.5}
   .err{color:var(--danger-2);border:1px solid var(--danger);border-radius:10px;padding:14px;margin-top:16px;background:rgba(255,255,255,.07)}
+  #dropoverlay{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.84)}
+  #dropoverlay.show{display:flex;animation:rise .14s ease both}
+  #dropoverlay .box{border:2px dashed var(--line2);border-radius:20px;padding:56px 78px;text-align:center;background:rgba(255,255,255,.03);pointer-events:none}
+  #dropoverlay .ic{font-size:46px;color:#fff;line-height:1;animation:pulse 1.4s ease-in-out infinite}
+  #dropoverlay .t{font-family:var(--display);font-weight:800;letter-spacing:5px;font-size:19px;color:#fff;margin-top:16px}
+  #dropoverlay .s{color:var(--dim);font-size:13px;margin-top:9px}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);z-index:9;background:#fff;color:#000;font-weight:700;padding:10px 20px;border-radius:9px;opacity:0;transition:.2s;box-shadow:0 0 26px rgba(255,255,255,.4);font-size:13px}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   footer{margin-top:34px;color:var(--muted);font-size:11px;text-align:center;line-height:1.8}
@@ -333,6 +339,9 @@
       <div id="writeup"></div></div>
   </div>
 </div>
+<div id="dropoverlay"><div class="box"><div class="ic">⇩</div>
+  <div class="t">DROP TO HUNT</div>
+  <div class="s">release anywhere — KRYPT will scan the file</div></div></div>
 <div class="toast" id="toast">copied</div>
 
 <script>
@@ -500,13 +509,19 @@ function onKey(e){
 }
 $("#target").addEventListener("keydown",onKey); $("#desc").addEventListener("keydown",onKey);
 
-/* drag & drop */
-const drop=$("#drop"), fi=document.createElement("input"); fi.type="file";
-drop.onclick=()=>fi.click(); fi.onchange=()=>fi.files[0]&&hunt(null,fi.files[0]);
-["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("hot");}));
-["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("hot");}));
-drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f)hunt(null,f);});
-addEventListener("dragover",e=>e.preventDefault()); addEventListener("drop",e=>e.preventDefault());
+/* drag & drop — the WHOLE window is a drop target; a drag-counter avoids the
+   flicker you get when the pointer crosses child elements. Drop anywhere. */
+const drop=$("#drop"), overlay=$("#dropoverlay"), fi=document.createElement("input"); fi.type="file";
+drop.onclick=()=>fi.click();
+fi.onchange=()=>{ if(fi.files[0]) hunt(null,fi.files[0]); fi.value=""; };
+let dragN=0;
+const hasFiles=e=>{try{return Array.from(e.dataTransfer.types||[]).includes("Files");}catch(_){return false;}};
+addEventListener("dragenter",e=>{ if(!hasFiles(e))return; e.preventDefault(); dragN++; overlay.classList.add("show"); });
+addEventListener("dragover", e=>{ if(!hasFiles(e))return; e.preventDefault(); try{e.dataTransfer.dropEffect="copy";}catch(_){} });
+addEventListener("dragleave",e=>{ if(!hasFiles(e))return; dragN=Math.max(0,dragN-1); if(!dragN) overlay.classList.remove("show"); });
+addEventListener("dragend",  ()=>{ dragN=0; overlay.classList.remove("show"); });
+addEventListener("drop",     e=>{ e.preventDefault(); dragN=0; overlay.classList.remove("show");
+  const f=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) hunt(null,f); });
 
 /* ---- VAULT: events · flags · writeups ---- */
 let VAULT_DATA={events:[]}, VSEL=null;
