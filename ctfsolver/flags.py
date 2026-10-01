@@ -23,9 +23,28 @@ _NAMED = [
     r"HTB\{[^}\n]{1,200}\}",
     r"[Kk][Ee][Yy]\{[^}\n]{1,200}\}",
 ]
-# conservative fallback: the wrapper token must itself contain 'flag' or 'ctf'
+# fallback 1: the wrapper token contains 'flag' or 'ctf'
 _SEMI = re.compile(r"(?i)[a-z0-9_]{0,18}(?:flag|ctf)[a-z0-9_]{0,18}\{[^}{\n]{1,200}\}")
+# fallback 2: a WRAPPER{content} that looks like a real flag, not code — the
+# wrapper is letters/digits directly before '{', and content has no spaces.
+_FALLBACK = re.compile(r"\b([A-Za-z][A-Za-z0-9_]{1,19})\{([^}\s]{2,100})\}")
+_CODE_WORDS = {
+    "struct", "class", "enum", "union", "namespace", "if", "for", "while",
+    "switch", "function", "void", "int", "char", "main", "return", "else",
+    "def", "typedef", "public", "private", "static", "const", "new", "do",
+    "try", "catch", "interface", "impl", "fn", "match", "case",
+}
 _PLACEHOLDER = re.compile(r"^[.\s…xX*?_\-]+$")
+
+
+def _fallback_flag(wrapper: str, content: str) -> bool:
+    """Does WRAPPER{content} look like a real (custom-format) flag?"""
+    if wrapper.lower() in _CODE_WORDS:
+        return False
+    if "_" in content or any(c.isdigit() for c in content):
+        return True
+    # uppercase event prefix (CSSA, HTB, DUCTF...) with a wordy body
+    return wrapper.isupper() and len(wrapper) >= 2 and len(content) >= 4
 
 
 def _inner(val: str) -> str | None:
@@ -69,6 +88,9 @@ def scan_text(text: str, strict: bool = False) -> list[dict]:
     if not strict:
         for m in _SEMI.finditer(text):
             add(m.group(0), "semi", 55)
+        for m in _FALLBACK.finditer(text):
+            if _fallback_flag(m.group(1), m.group(2)):
+                add(m.group(0), "guess", 50)
 
     # drop shorter matches that are substrings of a longer one
     # (e.g. CTF{x} inside picoCTF{x}, flag{x} inside myflag{x})
