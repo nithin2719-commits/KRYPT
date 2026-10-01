@@ -70,6 +70,11 @@ def run(provider: str, target: str, briefing: str, evidence: str, workdir: str,
                 "error": f"{provider} CLI not found"}
     prompt = _build_prompt(target, briefing, evidence, category)
     argv = [binpath, "-p", prompt, "--add-dir", workdir]
+    # give the agent access to the challenge file's directory too
+    if os.path.isfile(target):
+        d = os.path.dirname(os.path.abspath(target))
+        if d and d != workdir:
+            argv += ["--add-dir", d]
     try:
         proc = subprocess.run(argv, capture_output=True, timeout=timeout, cwd=workdir)
         out = proc.stdout.decode("utf-8", "replace").strip()
