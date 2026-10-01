@@ -165,10 +165,41 @@ def solve(target: str, description: str = "", use_ai: bool = False,
 
 def deep(target: str, description: str, provider: str,
          category: str = "auto", event: str = "") -> dict:
-    """Fast triage, then PREPARE (not run) a category-tuned MCP agent command."""
+    """Fast triage, then actually RUN the chosen agent (claude/agy, bounded — no
+    skip-permissions) to try to capture the flag."""
     res = solve(target, description, use_ai=False, category=category,
                 event=event, engine=provider)
     subject = target or f"(no file) {description[:120]}"
+    ag = agents.run(provider, subject, (description or "").strip(),
+                    res.get("markdown", ""), res["workdir"], category)
+    res["agent"] = ag
+    if ag.get("output"):
+        # scan the agent's answer for flags (named formats + FLAG: lines)
+        afl = [f for f in scan_text(ag["output"]) if not _is_placeholder(f["flag"])]
+        for line in ag["output"].splitlines():
+            ln = line.strip()
+            if ln.upper().startswith("FLAG:"):
+                val = ln[5:].strip()
+                if val and not _is_placeholder(val) and val not in [x["flag"] for x in afl]:
+                    afl.insert(0, {"flag": val, "kind": "agent", "confidence": 90})
+        res["steps"].append({
+            "step": f"deep-agent({provider})",
+            "summary": ("captured " + str(len(afl)) + " flag(s)" if afl
+                        else "agent ran; no flag in output"),
+            "output": ag["output"][:8000], "flags": afl})
+        if afl:
+            res["flags"] = _aggregate(res["steps"])
+            if event and event.strip():
+                try:
+                    res["saved"] = vault.add_solve(event.strip(), res,
+                                                   res["flags"][0]["flag"], provider)
+                except Exception:
+                    pass
+    else:
+        res["steps"].append({"step": f"deep-agent({provider})",
+                             "summary": "agent did not return output",
+                             "output": ag.get("error", ""), "flags": []})
+    # keep the runnable command for transparency / manual re-run
     res["handoff"] = agents.command_for(provider, subject,
                                         (description or "").strip(),
                                         res["workdir"], category)

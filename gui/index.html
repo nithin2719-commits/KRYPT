@@ -442,11 +442,15 @@ function render(res){
   h+='<div class="chips"><span class="mchip"><span class="k">TARGET</span><b>'+esc(t.raw||"")+'</b></span>'
     +(t.mime?'<span class="mchip"><span class="k">MIME</span><b>'+esc(t.mime)+'</b></span>':'')
     +'<span class="mchip"><span class="k">WORKDIR</span><b>'+esc(t.workdir||res.workdir||"")+'</b></span></div>';
-  if(res.handoff&&res.handoff.command){
-    h+='<div class="agent"><h3>◇ '+esc((res.handoff.provider||"agent").toUpperCase())+' · MCP DEEP HUNT — READY</h3>'
-      +'<div class="hnote">'+esc(res.handoff.note||"")+'</div>'
-      +'<div class="cmdbox"><code>'+esc(res.handoff.command)+'</code>'
-      +'<span class="act" onclick=\'window.__cp('+JSON.stringify(res.handoff.command)+')\'>COPY</span></div></div>';
+  if(res.agent&&(res.agent.output||res.agent.error)){
+    const prov=esc((res.agent.provider||"agent").toUpperCase());
+    h+='<div class="agent"><h3>◇ '+prov+' · MCP DEEP HUNT</h3>'
+      +'<pre>'+esc(res.agent.output||res.agent.error||"(no output)")+'</pre>';
+    if(res.handoff&&res.handoff.command)
+      h+='<div class="hnote" style="margin-top:10px">re-run manually:</div>'
+        +'<div class="cmdbox"><code>'+esc(res.handoff.command)+'</code>'
+        +'<span class="act" onclick=\'window.__cp('+JSON.stringify(res.handoff.command)+')\'>COPY</span></div>';
+    h+='</div>';
   }
   if(steps.length){
     h+='<div class="seclabel">TRIAGE LOG</div>';
@@ -469,9 +473,9 @@ function render(res){
 let _timer=null;
 function busy(b,deep){
   go.disabled=b;go.classList.toggle("busy",b);scan.classList.toggle("on",b);scanmsg.classList.toggle("on",b);
-  if(b){out.style.display="none";go.textContent=deep?"PREPARING":"HUNTING";
+  if(b){out.style.display="none";go.textContent=deep?"DEEP HUNT":"HUNTING";
     const t0=Date.now();
-    const msg=deep?'triage + preparing MCP agent hand-off · <b>{s}s</b>…':'hunting · <b>{s}s</b> · decoders · stego · crack · recurse…';
+    const msg=deep?'agent driving tools · <b>{s}s</b> · this can take a few minutes…':'hunting · <b>{s}s</b> · decoders · stego · crack · recurse…';
     const tick=()=>{scanmsg.innerHTML=msg.replace("{s}",((Date.now()-t0)/1000).toFixed(1));};
     tick();clearInterval(_timer);_timer=setInterval(tick,100);
   }else{clearInterval(_timer);go.textContent=GO_LABEL;}
