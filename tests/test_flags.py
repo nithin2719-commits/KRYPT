@@ -32,3 +32,14 @@ if __name__ == "__main__":
         if n.startswith("test_") and callable(fn):
             fn(); print("ok", n)
     print("all flag tests passed")
+
+
+def test_custom_event_formats():
+    assert _f("CSSA{m3mbership_card}") == ["CSSA{m3mbership_card}"]
+    assert _f("DUCTF{w1n}") == ["DUCTF{w1n}"]
+
+
+def test_rejects_plain_word_braces():
+    assert _f("card{active}") == []
+    assert _f("style{color}") == []
+    assert _f('int main(){char buf[64];}') == []
