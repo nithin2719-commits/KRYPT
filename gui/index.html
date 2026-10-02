@@ -326,6 +326,7 @@
         <button class="eng" data-eng="local" data-need="ollama">LOCAL · GPU</button>
         <button class="eng" data-eng="claude" data-need="claude">CLAUDE · MCP</button>
         <button class="eng" data-eng="agy" data-need="agy">AGY · MCP</button>
+        <button class="eng" data-eng="api" data-need="api">CLAUDE · API (sees images)</button>
       </div>
       <span class="enghint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> hunt · <kbd>Esc</kbd> clear</span>
     </div>
@@ -394,11 +395,14 @@ let ENGINE="off", CATEGORY="auto";
 
 /* ---- health: configure which engines are available ---- */
 fetch("/api/health").then(r=>r.json()).then(h=>{
-  const avail={ollama:!!h.ollama, claude:!!(h.engines&&h.engines.claude), agy:!!(h.engines&&h.engines.agy)};
+  const E=h.engines||{};
+  const avail={ollama:!!h.ollama, claude:!!E.claude, agy:!!E.agy, api:!!E.api};
   document.querySelectorAll(".eng[data-need]").forEach(b=>{
     const need=b.dataset.need;
-    if(!avail[need]){b.disabled=true;b.title=need+" not available";}
+    if(!avail[need]){b.disabled=true;
+      b.title=need==="api"?"set ANTHROPIC_API_KEY (or ~/.config/krypt/config.json) to enable":need+" not available";}
     else if(need==="ollama"){b.textContent="LOCAL · "+h.ollama.split("/").pop().replace(/:latest$/,"");}
+    else if(need==="api"){b.textContent="CLAUDE · API · "+((h.api_model||"api").replace(/^claude-/,""));}
   });
 }).catch(()=>{});
 
@@ -496,7 +500,7 @@ function busy(b,deep){
 }
 async function hunt(target,file){
   const desc=$("#desc").value, ev=$("#event").value.trim(), fmt=$("#fmt").value.trim(),
-        deep=(ENGINE==="claude"||ENGINE==="agy");
+        deep=(ENGINE==="claude"||ENGINE==="agy"||ENGINE==="api");
   if(ev){try{localStorage.setItem("krypt_event",ev);}catch(e){}}
   try{localStorage.setItem("krypt_fmt",fmt);}catch(e){}
   busy(true,deep);

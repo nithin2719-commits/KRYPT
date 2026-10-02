@@ -222,13 +222,24 @@ def solve(target: str, description: str = "", use_ai: bool = False,
 
 def deep(target: str, description: str, provider: str,
          category: str = "auto", event: str = "", flag_format: str = "") -> dict:
-    """Fast triage, then actually RUN the chosen agent (claude/agy, bounded — no
-    skip-permissions) to try to capture the flag."""
+    """Fast triage, then escalate to an AI engine to try to capture the flag.
+
+    provider 'api'  -> Anthropic API with vision (sees the challenge image).
+    provider 'claude'/'agy' -> the local CLI agent (bounded, no skip-permissions).
+    """
     res = solve(target, description, use_ai=False, category=category,
                 event=event, engine=provider, flag_format=flag_format)
     subject = target or f"(no file) {description[:120]}"
-    ag = agents.run(provider, subject, (description or "").strip(),
-                    res.get("markdown", ""), res["workdir"], category)
+    if provider == "api":
+        from ctfsolver import ai_api
+        r = ai_api.solve(target, (description or "").strip(),
+                         res.get("markdown", ""), flag_format, category)
+        note = ("" if r.get("output") else r.get("error", ""))
+        ag = {"ok": r.get("ok", False), "provider": "api",
+              "output": r.get("output", "") or note, "error": r.get("error", "")}
+    else:
+        ag = agents.run(provider, subject, (description or "").strip(),
+                        res.get("markdown", ""), res["workdir"], category)
     res["agent"] = ag
     if ag.get("output"):
         # scan the agent's answer for flags (named formats + FLAG: lines)
@@ -256,10 +267,11 @@ def deep(target: str, description: str, provider: str,
         res["steps"].append({"step": f"deep-agent({provider})",
                              "summary": "agent did not return output",
                              "output": ag.get("error", ""), "flags": []})
-    # keep the runnable command for transparency / manual re-run
-    res["handoff"] = agents.command_for(provider, subject,
-                                        (description or "").strip(),
-                                        res["workdir"], category)
+    # keep the runnable command for transparency / manual re-run (CLI engines only)
+    if provider != "api":
+        res["handoff"] = agents.command_for(provider, subject,
+                                            (description or "").strip(),
+                                            res["workdir"], category)
     return res
 
 
@@ -298,8 +310,11 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(500, {"error": "index.html missing"})
         elif path == "/api/health":
             model = ai.default_model() if ai.available() else None
-            self._send(200, {"ok": True, "ollama": model,
-                             "engines": agents.available()})
+            from ctfsolver import ai_api
+            engines = agents.available()
+            engines["api"] = ai_api.available()
+            self._send(200, {"ok": True, "ollama": model, "engines": engines,
+                             "api_model": ai_api.DEFAULT_MODEL})
         elif path == "/api/events":
             self._send(200, vault.list_events())
         elif path == "/api/writeup":
