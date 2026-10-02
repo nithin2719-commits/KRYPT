@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -35,6 +36,11 @@ PORT = int(os.environ.get("CTF_GUI_PORT", "8777"))
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 FMT_RE = re.compile(r"([A-Za-z0-9_]{2,20})\{[^}]{0,60}\}")
 MAX_UPLOAD = 512 * 1024 * 1024
+
+# CTF_FLAG_FORMAT is a process-global env var that solve() sets then restores.
+# ThreadingHTTPServer handles requests concurrently, so serialise the
+# format-sensitive section to stop overlapping solves clobbering each other.
+_SOLVE_LOCK = threading.Lock()
 
 
 def _derive_format(desc: str):
@@ -91,8 +97,10 @@ def _fileless(description: str, category: str) -> dict:
     from ctfsolver.detect import extract_targets
     from ctfsolver.triage import netcat as _nc, web as _web
 
+    import hashlib
     steps = categories.text_triage(description) if description else []
-    workdir = os.path.join(WORKSPACE, "common-" + str(abs(hash(description)) % 10**8))
+    digest = hashlib.sha1((description or "").encode("utf-8", "replace")).hexdigest()[:8]
+    workdir = os.path.join(WORKSPACE, "common-" + digest)
     os.makedirs(workdir, exist_ok=True)
 
     for kind, host, port in extract_targets(description)[:3]:
@@ -117,6 +125,7 @@ def solve(target: str, description: str = "", use_ai: bool = False,
     With no target but a briefing, runs the common (no-file) text pipeline.
     When `event` is set and a flag is found, auto-saves it to the Vault + writeup."""
     description = (description or "").strip()
+    _SOLVE_LOCK.acquire()
     old_fmt = os.environ.get("CTF_FLAG_FORMAT")
     set_fmt = False
     example = None
@@ -161,6 +170,7 @@ def solve(target: str, description: str = "", use_ai: bool = False,
     finally:
         if set_fmt:
             os.environ.pop("CTF_FLAG_FORMAT", None)
+        _SOLVE_LOCK.release()
 
 
 def deep(target: str, description: str, provider: str,

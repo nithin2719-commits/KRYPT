@@ -34,11 +34,40 @@ def _resolve(provider: str) -> str | None:
 
 
 PROMPT = (
-    "Solve this AUTHORIZED CTF challenge and print the flag. "
-    "Category: {category}. Target: {target}. {briefing}"
-    "Automated triage already ran. {tools}"
-    "Use your MCP tools to capture the flag, then print it prefixed with FLAG:."
+    "You are KRYPT, an expert CTF player solving ONE authorized challenge. "
+    "This is a sanctioned competition/practice environment, so analysis of the "
+    "provided artifact is in scope.\n\n"
+    "Category: {category}. Target: {target}.\n{briefing}"
+    "A deterministic triage pass already ran; its evidence is appended below — "
+    "read it FIRST and do not repeat work it already did.\n\n"
+    "{tools}"
+    "Method — work the funnel, cheapest first, and stop the moment the real "
+    "flag is in hand:\n"
+    "1. Orient: confirm the file type / target and what the triage evidence "
+    "already revealed. Form a hypothesis about where the flag hides.\n"
+    "2. Act on the single most promising lead with the fitting tool. One focused "
+    "step at a time; let each result steer the next.\n"
+    "3. Recurse only when needed: decode nested layers, carve embedded data, "
+    "or escalate to the category's heavier tools if the cheap wins ran dry.\n"
+    "4. Verify: the flag MUST match the challenge's flag format{fmt}. If what "
+    "you found does not match the format, it is not the flag — keep going.\n\n"
+    "Rules: never invent, guess, or 'reconstruct' a flag — only report one you "
+    "actually recovered from the artifact and can point to the step that "
+    "produced it. If you genuinely cannot capture it, say so and list the most "
+    "promising next lead instead of fabricating.\n\n"
+    "Output, in this order:\n"
+    "  FLAG: <the exact verified flag>   (omit this line entirely if not found)\n"
+    "  METHOD: 2-5 sentences — the path that worked, naming the decisive tool/step.\n"
+    "  EVIDENCE: the concrete output (hash cracked, decoded string, decompiled "
+    "check, carved offset) that proves the flag is real."
 )
+
+
+def _fmt_hint() -> str:
+    """Flag-format clause for the prompt, from CTF_FLAG_FORMAT if the operator
+    set one for this event (e.g. 'picoCTF\\{[^}]+\\}'). Empty otherwise."""
+    fmt = (os.environ.get("CTF_FLAG_FORMAT") or "").strip()
+    return f" (regex: {fmt})" if fmt else ""
 
 
 def available() -> dict:
@@ -54,7 +83,8 @@ def _build_prompt(target: str, briefing: str, evidence: str, category: str) -> s
         tools = f"Prefer tools: {' | '.join(t['mcp'])}. Skills: {', '.join(t['skills'])}.\n"
     except Exception:
         tools = ""
-    return (PROMPT.format(category=category, target=target, briefing=brief, tools=tools)
+    return (PROMPT.format(category=category, target=target, briefing=brief,
+                          tools=tools, fmt=_fmt_hint())
             + f"\n\nAutomated triage evidence:\n{evidence[:8000]}")
 
 
@@ -103,7 +133,8 @@ def command_for(provider: str, target: str, briefing: str, workdir: str,
         tools = f"Prefer these tools: {' | '.join(t['mcp'])}. Skills: {', '.join(t['skills'])}. "
     except Exception:
         tools = ""
-    prompt = PROMPT.format(category=category, target=target, briefing=brief, tools=tools)
+    prompt = PROMPT.format(category=category, target=target, briefing=brief,
+                           tools=tools, fmt=_fmt_hint())
     binpath = _resolve(provider)
     if not binpath:
         return {"provider": provider, "command": "",

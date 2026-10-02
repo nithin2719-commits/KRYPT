@@ -36,8 +36,11 @@ def _reports(pcap: str) -> list[bytes]:
         return []
     out = []
     for field in ("usbhid.data", "usb.capdata"):
-        r = subprocess.run([tshark, "-r", pcap, "-T", "fields", "-e", field],
-                           capture_output=True, timeout=120)
+        try:
+            r = subprocess.run([tshark, "-r", pcap, "-T", "fields", "-e", field],
+                               capture_output=True, timeout=120)
+        except (subprocess.TimeoutExpired, OSError):
+            continue
         for line in r.stdout.decode("latin-1", "replace").splitlines():
             h = line.strip().replace(":", "")
             if len(h) >= 16 and all(c in "0123456789abcdefABCDEF" for c in h):
