@@ -10,12 +10,18 @@ LOG="${XDG_RUNTIME_DIR:-/tmp}/krypt-gui.log"
 # Ensure agent CLIs (claude in ~/.local/bin, agy in /usr/bin) resolve for the server.
 export PATH="${HOME}/.local/bin:/usr/local/bin:/usr/bin:${PATH}"
 
+# ~/.local/bin (first on PATH above) holds a CTF practice wrapper named `curl`
+# that fakes responses for a few challenge ports. Keep it for manual use, but
+# this launcher must use the real binary for its health checks.
+CURL=/usr/bin/curl
+[ -x "$CURL" ] || CURL="$(command -v curl)"
+
 # Start backend if the port isn't already serving.
-if ! curl -s -o /dev/null --max-time 1 "${URL}/api/health"; then
+if ! "$CURL" -s -o /dev/null --max-time 1 "${URL}/api/health"; then
   cd "$HERE"
   CTF_GUI_PORT="$PORT" nohup "$PY" server.py >"$LOG" 2>&1 &
   for _ in $(seq 1 40); do
-    curl -s -o /dev/null --max-time 1 "${URL}/api/health" && break
+    "$CURL" -s -o /dev/null --max-time 1 "${URL}/api/health" && break
     sleep 0.15
   done
 fi

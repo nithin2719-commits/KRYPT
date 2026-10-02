@@ -6,11 +6,31 @@ CTF paths; it does not brute-force or exploit anything on its own.
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
 from urllib.parse import urljoin
 
 from ..flags import scan_text
 from ..runner import have, run
+
+
+def _real_curl() -> str:
+    """Resolve a genuine curl binary, skipping any `curl` shim earlier on PATH.
+
+    ~/.local/bin (which the Alt+T launcher puts first on PATH so `claude`/`agy`
+    resolve) contains a CTF practice wrapper named `curl` that fakes responses
+    for a few challenge ports. KRYPT's own recon must use the real binary, or the
+    web triage reports fabricated pages/flags. Prefer the real paths; fall back
+    to PATH only if none exist.
+    """
+    for c in ("/usr/bin/curl", "/bin/curl", "/usr/local/bin/curl"):
+        if os.path.exists(c):
+            return c
+    return shutil.which("curl") or "curl"
+
+
+_CURL = _real_curl()
 
 COMMON_PATHS = [
     "/robots.txt", "/sitemap.xml", "/.git/HEAD", "/.env", "/flag",
@@ -26,7 +46,7 @@ _COOKIE_JWT = re.compile(r'eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-
 
 
 def _curl(url: str, args: list[str], timeout: int = 20):
-    return run(["curl", "-sS", "-k", "-L", "--max-time", str(timeout - 2),
+    return run([_CURL, "-sS", "-k", "-L", "--max-time", str(timeout - 2),
                 *args, url], timeout=timeout)
 
 
@@ -54,7 +74,7 @@ def triage(url: str, workdir: str) -> list[dict]:
     hits = []
     for p in COMMON_PATHS:
         u = urljoin(url, p)
-        code = run(["curl", "-s", "-k", "-o", "/dev/null", "-w", "%{http_code}",
+        code = run([_CURL, "-s", "-k", "-o", "/dev/null", "-w", "%{http_code}",
                     "--max-time", "8", u], timeout=12).stdout.strip()
         if code and code not in ("404", "000"):
             hits.append(f"{code}  {u}")
