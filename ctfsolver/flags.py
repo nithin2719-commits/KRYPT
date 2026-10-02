@@ -1,12 +1,15 @@
 """Flag detection: sweep text/bytes for CTF flags — precisely.
 
 Priority:
-  1. custom  (CTF_FLAG_FORMAT env, the event's exact format)  -> conf 100
+  1. custom  (CTF_FLAG_FORMAT env, the event's exact format)   -> conf 100
   2. named   (flag{}, FLAG{}, CTF{}, <word>CTF{}, HTB{}, key{}) -> conf 90
   3. semi    (a wrapper that literally contains 'flag' or 'ctf') -> conf 55
+  4. guess   (an UPPERCASE event acronym, e.g. CSSA{...})        -> conf 50
 
-There is deliberately NO "any word{...}" pattern — that matched code like
-`win(){...}` and random `token{...}` and produced false flags. Content is also
+The "guess" tier is deliberately narrow: only an all-caps acronym wrapper with
+a flag-ish body counts. A generic "any word{...}" pattern is rejected because it
+matched ordinary code/markup — `struct Point{x_0}`, `dict{key_1}`, CSS
+`div{margin_0}`, LaTeX `\\frac{a_1}` — and produced false flags. Content is also
 validated (no newlines, not a placeholder like X{...}).
 """
 from __future__ import annotations
@@ -25,8 +28,8 @@ _NAMED = [
 ]
 # fallback 1: the wrapper token contains 'flag' or 'ctf'
 _SEMI = re.compile(r"(?i)[a-z0-9_]{0,18}(?:flag|ctf)[a-z0-9_]{0,18}\{[^}{\n]{1,200}\}")
-# fallback 2: a WRAPPER{content} that looks like a real flag, not code — the
-# wrapper is letters/digits directly before '{', and content has no spaces.
+# fallback 2: a WRAPPER{content} candidate; _fallback_flag() then decides if it
+# is a real custom flag (uppercase acronym + flag-ish body) vs. code/markup.
 _FALLBACK = re.compile(r"\b([A-Za-z][A-Za-z0-9_]{1,19})\{([^}\s]{2,100})\}")
 _CODE_WORDS = {
     "struct", "class", "enum", "union", "namespace", "if", "for", "while",
@@ -38,13 +41,36 @@ _PLACEHOLDER = re.compile(r"^[.\s…xX*?_\-]+$")
 
 
 def _fallback_flag(wrapper: str, content: str) -> bool:
-    """Does WRAPPER{content} look like a real (custom-format) flag?"""
+    """Does WRAPPER{content} look like a real custom-format flag (no declared
+    format) rather than code/markup?
+
+    Only an UPPERCASE event acronym (CSSA, DUCTF, UIUCTF...) with a plausible,
+    flag-ish body qualifies. Lowercase/mixed-case wrappers are deliberately NOT
+    guessed: they collide with ordinary code and markup — `struct Point{x_0}`,
+    `dict{key_1}`, `set{a_1}`, CSS `div{margin_0}`, LaTeX `\\frac{a_1}` — which
+    the old "any underscore/digit → flag" rule turned into false positives.
+    Lowercase custom formats (e.g. `sun{...}`) are still caught the right way:
+    via CTF_FLAG_FORMAT or a briefing-derived format (conf 100).
+    """
     if wrapper.lower() in _CODE_WORDS:
         return False
-    if "_" in content or any(c.isdigit() for c in content):
-        return True
-    # uppercase event prefix (CSSA, HTB, DUCTF...) with a wordy body
-    return wrapper.isupper() and len(wrapper) >= 2 and len(content) >= 4
+    letters = sum(c.isalpha() for c in wrapper)
+    # wrapper must be an all-caps acronym with ≥2 letters and NO underscore.
+    # Real event prefixes are single tokens (CSSA, HTB, DUCTF, UIUCTF); an
+    # underscore means a C macro/constant (MAX_BUF, BUF_SIZE), not a flag.
+    if not (wrapper.isupper() and letters >= 2 and "_" not in wrapper):
+        return False
+    # body must be clean flag-ish text, not binary noise. Scanning raw bytes of
+    # an image/ELF throws up junk like LK{;ïâ9Wuñ®k} — a 2-letter wrapper with a
+    # body full of high/non-ASCII bytes. Require printable ASCII dominated by the
+    # usual flag charset, and (as before) at least one lowercase ASCII letter so
+    # UPPER_SNAKE constants ({BUF_SIZE}, {FIXME}) are still rejected.
+    if len(content) < 3 or not content.isascii():
+        return False
+    good = sum((c.isalnum() or c in "_-") for c in content)
+    if good / len(content) < 0.9:
+        return False
+    return any("a" <= c <= "z" for c in content)
 
 
 def _inner(val: str) -> str | None:
