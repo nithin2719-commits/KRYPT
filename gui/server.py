@@ -124,6 +124,12 @@ def _fileless(description: str, category: str) -> dict:
     workdir = os.path.join(WORKSPACE, "common-" + digest)
     os.makedirs(workdir, exist_ok=True)
 
+    # OSINT: pull usernames/emails/domains/phones from the briefing and actually
+    # run the installed OSINT tools (sherlock/maigret/holehe/theHarvester/...).
+    if category == "osint" and description:
+        from ctfsolver.triage import osint as _osint
+        steps += _osint.triage(description, workdir)
+
     for kind, host, port in extract_targets(description)[:3]:
         if kind == "netcat":
             steps.append({"step": "target-found",
