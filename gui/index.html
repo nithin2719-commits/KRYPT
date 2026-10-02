@@ -322,11 +322,12 @@
     <div class="enginerow">
       <span class="englabel">ENGINE</span>
       <div class="engines" id="engines">
-        <button class="eng sel" data-eng="off">TRIAGE</button>
+        <button class="eng sel" data-eng="all">ALL · AUTO (every AI)</button>
+        <button class="eng" data-eng="off">TRIAGE</button>
         <button class="eng" data-eng="local" data-need="ollama">LOCAL · GPU</button>
         <button class="eng" data-eng="claude" data-need="claude">CLAUDE · MCP</button>
-        <button class="eng" data-eng="agy" data-need="agy">AGY · MCP</button>
         <button class="eng" data-eng="api" data-need="api">CLAUDE · API (sees images)</button>
+        <button class="eng" data-eng="agy" data-need="agy">AGY · MCP</button>
       </div>
       <span class="enghint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> hunt · <kbd>Esc</kbd> clear</span>
     </div>
@@ -358,7 +359,7 @@
 const $=s=>document.querySelector(s);
 const out=$("#out"), scan=$("#scan"), go=$("#go"), scanmsg=$("#scanmsg");
 const GO_LABEL=go.textContent;
-let ENGINE="off", CATEGORY="auto";
+let ENGINE="all", CATEGORY="auto";
 
 /* ---- boot intro (glitch + decrypt scramble) ---- */
 (function(){
@@ -442,6 +443,11 @@ function render(res){
     +'<div class="stat '+(flags.length?"hit":"")+'"><div class="n">'+flags.length+'</div><div class="l">FLAGS</div></div>'
     +'<div class="stat"><div class="n">'+steps.length+'</div><div class="l">STEPS RUN</div></div>'
     +'<div class="stat"><div class="n" style="font-size:15px;padding-top:5px">'+kind.toUpperCase()+'</div><div class="l">VECTOR</div></div></div>';
+  if(res.escalation){
+    const e=res.escalation;
+    h+='<div class="chips"><span class="mchip"><span class="k">EVERY-AI</span><b>'
+      +esc((e.tried||[]).join("  →  "))+(e.solved_by?('   ✓ solved by '+esc(e.solved_by)):'   — no flag, escalate manually')+'</b></span></div>';
+  }
   h+='<div class="resbar">';
   if(flags.length)h+='<span class="act" id="copyall">⧉ COPY ALL FLAGS</span>';
   if(steps.length)h+='<span class="act" id="expandall">⊕ EXPAND</span><span class="act" id="collapseall">⊖ COLLAPSE</span>';
@@ -500,7 +506,7 @@ function busy(b,deep){
 }
 async function hunt(target,file){
   const desc=$("#desc").value, ev=$("#event").value.trim(), fmt=$("#fmt").value.trim(),
-        deep=(ENGINE==="claude"||ENGINE==="agy"||ENGINE==="api");
+        deep=(ENGINE==="claude"||ENGINE==="agy"||ENGINE==="api"||ENGINE==="all");
   if(ev){try{localStorage.setItem("krypt_event",ev);}catch(e){}}
   try{localStorage.setItem("krypt_fmt",fmt);}catch(e){}
   busy(true,deep);

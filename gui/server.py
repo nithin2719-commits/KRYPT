@@ -241,13 +241,19 @@ def deep(target: str, description: str, provider: str,
         # agy has no read-only allowlist; running it unattended would need blanket
         # --dangerously-skip-permissions, which auto-approves its full offensive
         # arsenal (execute_command / metasploit / hydra / pacu / delete_file). We
-        # never fire that from a web request — triage still runs, and the ready-to-
-        # run autonomous command is handed off below for the operator to launch in
-        # their own terminal. Use the CLAUDE engine for safe in-tool MCP solving.
-        ag = {"ok": False, "provider": "agy", "output": "",
-              "error": "agy runs manually: copy the command below and launch it in "
-                       "your own terminal (it auto-approves every tool, so stay "
-                       "present). For autonomous in-tool solving use CLAUDE · MCP."}
+        # OFF by default: we hand off the ready-to-run command for the operator to
+        # launch in their own terminal. The operator can opt in to auto-running it
+        # from the tool by exporting KRYPT_AGY_YOLO=1 (their deliberate choice).
+        if _truthy(os.environ.get("KRYPT_AGY_YOLO")):
+            ag = agents.run("agy", subject, (description or "").strip(),
+                            res.get("markdown", ""), res["workdir"], category,
+                            allow_skip=True)
+        else:
+            ag = {"ok": False, "provider": "agy", "output": "",
+                  "error": "agy is hand-off by default: copy the command below and "
+                           "run it in your own terminal (it auto-approves every "
+                           "tool). To let KRYPT run it automatically, export "
+                           "KRYPT_AGY_YOLO=1. For safe in-tool solving use CLAUDE·MCP."}
     else:
         ag = agents.run(provider, subject, (description or "").strip(),
                         res.get("markdown", ""), res["workdir"], category)
@@ -284,6 +290,58 @@ def deep(target: str, description: str, provider: str,
                                             (description or "").strip(),
                                             res["workdir"], category)
     return res
+
+
+def _truthy(v) -> bool:
+    return str(v or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def escalate(target: str, description: str, category: str = "auto",
+             event: str = "", flag_format: str = "") -> dict:
+    """'Every AI' mode: run each available engine in order, stopping at the first
+    real flag. triage(+LOCAL) -> CLAUDE·MCP -> CLAUDE·API -> agy. agy is the
+    hand-off command unless KRYPT_AGY_YOLO is set. Cheap stages gate the costly
+    ones: an easy challenge is solved by triage for free and never calls an API."""
+    from ctfsolver import ai_api
+    tried = []
+
+    def done(res, by):
+        res["escalation"] = {"tried": tried, "solved_by": by}
+        return res
+
+    # 1. deterministic triage — fast and free; solves the easy wins with no AI cost
+    res = solve(target, description, use_ai=False, category=category,
+                event=event, engine="triage", flag_format=flag_format)
+    tried.append("triage")
+    if res.get("flags"):
+        return done(res, "triage")
+
+    # 2. LOCAL GPU model (offline) — only if triage missed
+    if ai.available():
+        res = solve(target, description, use_ai=True, category=category,
+                    event=event, engine="local", flag_format=flag_format)
+        tried.append("local")
+        if res.get("flags"):
+            return done(res, "local")
+
+    # 3. CLAUDE · MCP (scoped read-only ghidra/hexstrike)
+    if agents.available().get("claude"):
+        res = deep(target, description, "claude", category, event, flag_format)
+        tried.append("claude-mcp")
+        if res.get("flags"):
+            return done(res, "claude-mcp")
+
+    # 3. CLAUDE · API (vision — sees images)
+    if ai_api.available():
+        res = deep(target, description, "api", category, event, flag_format)
+        tried.append("claude-api")
+        if res.get("flags"):
+            return done(res, "claude-api")
+
+    # 4. agy last — auto-runs only under KRYPT_AGY_YOLO, else handed off
+    res = deep(target, description, "agy", category, event, flag_format)
+    tried.append("agy")
+    return done(res, "agy" if res.get("flags") else None)
 
 
 def _safe_name(name: str) -> str:
@@ -426,10 +484,12 @@ class Handler(BaseHTTPRequestHandler):
                 provider = data.get("provider") or "claude"
                 if not target and not desc.strip():
                     return self._send(400, {"error": "give a target or a briefing"})
-                return self._send(200, deep(target, desc, provider,
-                                            data.get("category", "auto"),
-                                            data.get("event", ""),
-                                            data.get("flag_format", "")))
+                cat = data.get("category", "auto")
+                ev = data.get("event", "")
+                fmt = data.get("flag_format", "")
+                if provider == "all":
+                    return self._send(200, escalate(target, desc, cat, ev, fmt))
+                return self._send(200, deep(target, desc, provider, cat, ev, fmt))
             if path == "/api/event/delete":
                 data = json.loads(self._read_body() or b"{}")
                 ok = vault.delete_event(data.get("event_id", ""))

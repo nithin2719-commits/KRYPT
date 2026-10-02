@@ -133,9 +133,14 @@ def _mcp_args(provider: str) -> list:
 
 
 def run(provider: str, target: str, briefing: str, evidence: str, workdir: str,
-        category: str = "auto", timeout: int = 300) -> dict:
-    """Actually invoke the agent CLI (its own print mode, WITHOUT
-    --dangerously-skip-permissions, so it stays bounded) and return its output.
+        category: str = "auto", timeout: int = 300, allow_skip: bool = False) -> dict:
+    """Invoke the agent CLI in print mode and return its output.
+
+    claude runs with a scoped read-only MCP allowlist (no skip-permissions).
+    allow_skip=True (only honoured for agy, and only set when the operator opted
+    in via KRYPT_AGY_YOLO) appends --dangerously-skip-permissions so agy can use
+    its tools unattended — that auto-approves its FULL arsenal, so it is never on
+    by default.
     """
     import subprocess
     binpath = _resolve(provider)
@@ -144,6 +149,8 @@ def run(provider: str, target: str, briefing: str, evidence: str, workdir: str,
                 "error": f"{provider} CLI not found"}
     prompt = _build_prompt(target, briefing, evidence, category)
     argv = [binpath, "-p", prompt, "--add-dir", workdir, *_mcp_args(provider)]
+    if allow_skip and provider == "agy":
+        argv.append("--dangerously-skip-permissions")
     # give the agent access to the challenge file's directory too
     if os.path.isfile(target):
         d = os.path.dirname(os.path.abspath(target))
