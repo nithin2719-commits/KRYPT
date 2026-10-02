@@ -184,12 +184,27 @@ def command_for(provider: str, target: str, briefing: str, workdir: str,
         return {"provider": provider, "command": "",
                 "note": f"{provider} CLI not found"}
     argv = [binpath, "-p", prompt, "--add-dir", workdir, *_mcp_args(provider)]
+    if provider == "agy":
+        # agy has no scoped allowlist (unlike claude's --allowedTools), so the
+        # only way for it to run its 150 hexstrike tools unattended is blanket
+        # --dangerously-skip-permissions. We put that in the HANDED-OFF command
+        # for the operator to run in their own terminal — never auto-executed by
+        # the server — so a web request can't trigger arbitrary shell / metasploit
+        # / pacu / delete_file on adversarial challenge input.
+        argv.append("--dangerously-skip-permissions")
+        note = ("agy has no read-only allowlist, so this command auto-approves "
+                "ALL its tools (incl. execute_command, metasploit, hydra, pacu, "
+                "delete_file). Run it yourself in a terminal where you can watch "
+                "and Ctrl-C it; don't point it at hosts you're not authorized to "
+                "test. Add --sandbox to restrict agy's own shell.")
+    else:
+        note = ("Run this in your terminal to drive the MCP tools. The claude "
+                "engine auto-approves only a read-only analysis allowlist "
+                "(ghidra + hexstrike static tools); it will still prompt for "
+                "anything else. Add --dangerously-skip-permissions yourself "
+                "only if you want it fully autonomous.")
     return {
         "provider": provider,
         "command": " ".join(shlex.quote(a) for a in argv),
-        "note": ("Run this in your terminal to drive the MCP tools. The claude "
-                 "engine auto-approves only a read-only analysis allowlist "
-                 "(ghidra + hexstrike static tools); it will still prompt for "
-                 "anything else. Add --dangerously-skip-permissions yourself "
-                 "only if you want it fully autonomous."),
+        "note": note,
     }

@@ -237,6 +237,17 @@ def deep(target: str, description: str, provider: str,
         note = ("" if r.get("output") else r.get("error", ""))
         ag = {"ok": r.get("ok", False), "provider": "api",
               "output": r.get("output", "") or note, "error": r.get("error", "")}
+    elif provider == "agy":
+        # agy has no read-only allowlist; running it unattended would need blanket
+        # --dangerously-skip-permissions, which auto-approves its full offensive
+        # arsenal (execute_command / metasploit / hydra / pacu / delete_file). We
+        # never fire that from a web request — triage still runs, and the ready-to-
+        # run autonomous command is handed off below for the operator to launch in
+        # their own terminal. Use the CLAUDE engine for safe in-tool MCP solving.
+        ag = {"ok": False, "provider": "agy", "output": "",
+              "error": "agy runs manually: copy the command below and launch it in "
+                       "your own terminal (it auto-approves every tool, so stay "
+                       "present). For autonomous in-tool solving use CLAUDE · MCP."}
     else:
         ag = agents.run(provider, subject, (description or "").strip(),
                         res.get("markdown", ""), res["workdir"], category)
