@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local web backend for WRAITH (the ctf-solver GUI).
+"""Local web backend for KRYPT (the ctf-solver GUI).
 
 Binds to 127.0.0.1 only. Serves the themed single-page UI and exposes:
   GET  /                -> index.html
@@ -222,7 +222,7 @@ def _safe_name(name: str) -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "wraith/1.0"
+    server_version = "krypt/1.0"
 
     def log_message(self, *a):
         pass
@@ -250,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 self._send(500, {"error": "index.html missing"})
         elif path == "/api/health":
-            model = ai.DEFAULT_MODEL if ai.available() else None
+            model = ai.default_model() if ai.available() else None
             self._send(200, {"ok": True, "ollama": model,
                              "engines": agents.available()})
         elif path == "/api/events":
@@ -299,6 +299,25 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", "0"))
         return b"" if n > MAX_UPLOAD else self.rfile.read(n)
 
+    def _stream_to_file(self, dest: str) -> int:
+        """Stream the request body straight to disk in chunks instead of buffering
+        it all in RAM, so large forensics artifacts (memory dumps, pcaps, disk
+        images) upload reliably without risking an out-of-memory kill. Returns
+        bytes written, or -1 if the body is empty or over MAX_UPLOAD."""
+        n = int(self.headers.get("Content-Length", "0"))
+        if n <= 0 or n > MAX_UPLOAD:
+            return -1
+        remaining, written = n, 0
+        with open(dest, "wb") as fh:
+            while remaining > 0:
+                chunk = self.rfile.read(min(1 << 20, remaining))
+                if not chunk:
+                    break
+                fh.write(chunk)
+                written += len(chunk)
+                remaining -= len(chunk)
+        return written
+
     def do_POST(self):
         try:
             path = urlparse(self.path).path
@@ -316,11 +335,8 @@ class Handler(BaseHTTPRequestHandler):
                 os.makedirs(UPLOADS, exist_ok=True)
                 fname = _safe_name(self.headers.get("X-Filename", "upload.bin"))
                 dest = os.path.join(UPLOADS, fname)
-                body = self._read_body()
-                if not body:
+                if self._stream_to_file(dest) <= 0:
                     return self._send(400, {"error": "empty or too-large upload"})
-                with open(dest, "wb") as fh:
-                    fh.write(body)
                 q = parse_qs(urlparse(self.path).query)
                 desc = q.get("desc", [""])[0]
                 cat = q.get("category", ["auto"])[0]
@@ -350,7 +366,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     os.makedirs(UPLOADS, exist_ok=True)
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"WRAITH on http://{HOST}:{PORT}")
+    print(f"KRYPT on http://{HOST}:{PORT}")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

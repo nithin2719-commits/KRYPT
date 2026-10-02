@@ -414,6 +414,9 @@ $("#cats").addEventListener("click",e=>{
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1200);}
 function copy(v){navigator.clipboard.writeText(v).then(()=>toast("copied  "+v.slice(0,34)));}
 function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+/* attribute-safe: also escapes quotes, so a flag/command with ' or " can't
+   break out of (or inject into) the data-attribute it's copied from. */
+function escA(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 window.__cp=copy;
 
 /* ---- render ---- */
@@ -433,7 +436,7 @@ function render(res){
   h+='</div>';
   if(flags.length){
     h+='<div class="capture"><div class="cap-head"><span class="xh">⊕</span>FLAG CAPTURED<span class="cnt">'+flags.length+' candidate'+(flags.length>1?"s":"")+'</span></div><div class="flist">';
-    flags.forEach(f=>{h+='<div class="flag" onclick=\'window.__cp('+JSON.stringify(f.flag)+')\'><div class="top"><span class="val">'+esc(f.flag)+'</span><span class="cp">COPY</span></div>'
+    flags.forEach(f=>{h+='<div class="flag" data-v="'+escA(f.flag)+'" onclick="window.__cp(this.dataset.v)"><div class="top"><span class="val">'+esc(f.flag)+'</span><span class="cp">COPY</span></div>'
       +'<div class="fmeta"><span>CONF '+f.confidence+'</span>·<span>'+esc(f.kind)+'</span>·<span>via '+esc(f.source||"?")+'</span><span class="bar"><i style="width:'+Math.min(100,f.confidence)+'%"></i></span></div></div>';});
     h+='</div></div>';
   }else{
@@ -449,8 +452,11 @@ function render(res){
     if(res.handoff&&res.handoff.command)
       h+='<div class="hnote" style="margin-top:10px">re-run manually:</div>'
         +'<div class="cmdbox"><code>'+esc(res.handoff.command)+'</code>'
-        +'<span class="act" onclick=\'window.__cp('+JSON.stringify(res.handoff.command)+')\'>COPY</span></div>';
+        +'<span class="act" data-v="'+escA(res.handoff.command)+'" onclick="window.__cp(this.dataset.v)">COPY</span></div>';
     h+='</div>';
+  }
+  if(res.ai){
+    h+='<div class="agent"><h3>◇ LOCAL · AI ANALYSIS</h3><pre>'+esc(res.ai)+'</pre></div>';
   }
   if(steps.length){
     h+='<div class="seclabel">TRIAGE LOG</div>';
