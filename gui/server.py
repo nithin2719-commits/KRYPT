@@ -43,13 +43,34 @@ MAX_UPLOAD = 512 * 1024 * 1024
 _SOLVE_LOCK = threading.Lock()
 
 
+# Phrases that mean the briefing is declaring the flag FORMAT (vs. just
+# containing a wrapped-looking token that is really ciphertext to decode).
+_FMT_HINT = re.compile(
+    r"(?i)\b(flag\s*format|format\s*[:=]|flags?\s+(?:are|look|is|will|should)"
+    r"|wrapped\s+in|submit|answer\s+format)\b")
+
+
 def _derive_format(desc: str):
-    """Pull a flag wrapper (e.g. picoCTF{...}) out of a briefing.
-    Returns (format_regex, example_string) so the example can be excluded."""
-    m = FMT_RE.search(desc or "")
+    """Pull a flag wrapper (e.g. picoCTF{...}) out of a briefing, but ONLY when
+    the briefing is really declaring the flag format — not when it merely
+    contains a wrapped-looking token that is actually the ciphertext to decode
+    (e.g. 'decode this: synt{...}'). Mistaking ciphertext for the format makes
+    the decoder match the raw input and skip the real decoded flag.
+
+    Returns (format_regex, example_string) so the example can be excluded, or
+    (None, None) when no format should be assumed."""
+    desc = desc or ""
+    m = FMT_RE.search(desc)
     if not m:
         return (None, None)
-    return (re.escape(m.group(1)) + r"\{[^}]+\}", m.group(0))
+    wrapper, token = m.group(1), m.group(0)
+    w = wrapper.lower()
+    flaggy = w in ("flag", "ctf") or w.endswith("ctf") or wrapper.upper() in ("HTB", "KEY")
+    # Derive a format only with a clear signal: an explicit "flag format" hint,
+    # a flag-ish wrapper, or a placeholder body (FLAG{xxxx}, EVENT{...}).
+    if _FMT_HINT.search(desc) or flaggy or _is_placeholder(token):
+        return (re.escape(wrapper) + r"\{[^}]+\}", token)
+    return (None, None)
 
 
 # inner words that mean "the flag/password goes here", not an actual flag
