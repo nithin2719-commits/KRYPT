@@ -109,7 +109,7 @@
   .brieflabel{font-size:10px;letter-spacing:2px;color:var(--muted);margin:0 0 7px 2px}
   .brieflabel b{color:var(--fg2)}
   .brieflabel code{color:var(--fg2);background:#0b0b0c;border:1px solid var(--line);border-radius:4px;padding:0 4px;font-size:10px}
-  #desc{display:block;min-height:104px;resize:vertical;line-height:1.55;font-size:14px}
+  #desc{display:block;min-height:150px;max-height:52vh;resize:vertical;line-height:1.6;font-size:14px;overflow-y:auto}
   .go{font-family:var(--display);font-weight:800;letter-spacing:2px;font-size:14px;
     background:#fff;color:#000;border:none;padding:16px 26px;border-radius:10px;cursor:pointer;min-width:158px;
     transition:.16s;box-shadow:0 0 22px rgba(255,255,255,.22)}
@@ -288,7 +288,12 @@
     <div class="briefwrap">
       <div class="brieflabel">CHALLENGE BRIEFING — <b>paste the whole challenge here.</b> KRYPT reads it, finds any <code>nc host port</code>/URL/flag-format inside, and works it. A file or target above is optional.</div>
       <textarea id="desc" class="field" spellcheck="false"
-        placeholder="e.g. 'The server leaks memory. Flag format: FLAG{...}. Author says look at the stack.'"></textarea>
+        placeholder="Paste the whole challenge — story, ciphertext, nc host port, URL, hashes. KRYPT sweeps it, decodes it, and probes any service it finds."></textarea>
+    </div>
+    <div class="enginerow">
+      <span class="englabel">FLAG FMT</span>
+      <input id="fmt" class="field evfield" spellcheck="false"
+             placeholder="optional — the exact flag format, e.g. POCTF{...} · locks the sweep to it">
     </div>
     <div class="enginerow">
       <span class="englabel">EVENT</span>
@@ -487,23 +492,26 @@ function busy(b,deep){
   }else{clearInterval(_timer);go.textContent=GO_LABEL;}
 }
 async function hunt(target,file){
-  const desc=$("#desc").value, ev=$("#event").value.trim(), deep=(ENGINE==="claude"||ENGINE==="agy");
+  const desc=$("#desc").value, ev=$("#event").value.trim(), fmt=$("#fmt").value.trim(),
+        deep=(ENGINE==="claude"||ENGINE==="agy");
   if(ev){try{localStorage.setItem("krypt_event",ev);}catch(e){}}
+  try{localStorage.setItem("krypt_fmt",fmt);}catch(e){}
   busy(true,deep);
   try{
     if(file){
-      const url="/api/upload?category="+CATEGORY+"&event="+encodeURIComponent(ev)+"&desc="+encodeURIComponent(desc);
+      const url="/api/upload?category="+CATEGORY+"&event="+encodeURIComponent(ev)
+                +"&flag_format="+encodeURIComponent(fmt)+"&desc="+encodeURIComponent(desc);
       const r=await fetch(url,{method:"POST",
         headers:{"X-Filename":file.name,"X-Ai":ENGINE==="local"?"1":"0","Content-Type":"application/octet-stream"},body:file});
       const res=await r.json(); render(res);
       if(deep&&!(res.flags&&res.flags.length)&&res.target&&res.target.raw){
         busy(true,true); const dr=await fetch("/api/deep",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({target:res.target.raw,description:desc,provider:ENGINE,category:CATEGORY,event:ev})}); render(await dr.json());
+          body:JSON.stringify({target:res.target.raw,description:desc,provider:ENGINE,category:CATEGORY,event:ev,flag_format:fmt})}); render(await dr.json());
       }
     }else{
       const ep=deep?"/api/deep":"/api/solve";
-      const body=deep?{target:target||"",description:desc,provider:ENGINE,category:CATEGORY,event:ev}
-                     :{target:target||"",description:desc,ai:ENGINE==="local",category:CATEGORY,event:ev};
+      const body=deep?{target:target||"",description:desc,provider:ENGINE,category:CATEGORY,event:ev,flag_format:fmt}
+                     :{target:target||"",description:desc,ai:ENGINE==="local",category:CATEGORY,event:ev,flag_format:fmt};
       const r=await fetch(ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
       render(await r.json());
     }
@@ -516,9 +524,16 @@ go.onclick=solveTarget;
 function onKey(e){
   if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();solveTarget();}
   else if(e.key==="Enter"&&e.target.id==="target"&&!e.shiftKey){e.preventDefault();solveTarget();}
-  else if(e.key==="Escape"){$("#target").value="";$("#desc").value="";out.style.display="none";document.body.classList.remove("has-results");}
+  else if(e.key==="Enter"&&e.target.id==="fmt"&&!e.shiftKey){e.preventDefault();solveTarget();}
+  else if(e.key==="Escape"){$("#target").value="";$("#desc").value="";$("#fmt").value="";out.style.display="none";document.body.classList.remove("has-results");}
 }
-$("#target").addEventListener("keydown",onKey); $("#desc").addEventListener("keydown",onKey);
+$("#target").addEventListener("keydown",onKey); $("#desc").addEventListener("keydown",onKey); $("#fmt").addEventListener("keydown",onKey);
+
+/* briefing box auto-grows as you paste (bounded by the CSS max-height) */
+(function(){const d=$("#desc");if(!d)return;
+  const grow=()=>{d.style.height="auto";d.style.height=Math.min(d.scrollHeight+2,Math.round(innerHeight*0.52))+"px";};
+  d.addEventListener("input",grow); d.addEventListener("paste",()=>setTimeout(grow,0));})();
+try{const lf=localStorage.getItem("krypt_fmt"); if(lf)$("#fmt").value=lf;}catch(e){}
 
 /* drag & drop — the WHOLE window is a drop target; a drag-counter avoids the
    flicker you get when the pointer crosses child elements. Drop anywhere. */

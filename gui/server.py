@@ -140,10 +140,27 @@ def _fileless(description: str, category: str) -> dict:
                        "mime": ""}, "workdir": workdir, "steps": steps, "flags": []}
 
 
+def _format_to_regex(fmt: str) -> str:
+    """Turn a user-entered flag format into a search regex. Accepts a wrapper
+    sample like 'POCTF{...}' or 'flag{}' (-> POCTF\\{[^}]+\\}), or, if it already
+    looks like a regex, uses it verbatim."""
+    fmt = (fmt or "").strip()
+    if not fmt:
+        return ""
+    if any(c in fmt for c in "[]*\\") or "+}" in fmt:
+        return fmt
+    m = re.match(r"([A-Za-z0-9_]{1,24})\{", fmt)
+    if m:
+        return re.escape(m.group(1)) + r"\{[^}]+\}"
+    return re.escape(fmt.rstrip("{} .")) + r"\{[^}]+\}"
+
+
 def solve(target: str, description: str = "", use_ai: bool = False,
-          category: str = "auto", event: str = "", engine: str = "triage") -> dict:
+          category: str = "auto", event: str = "", engine: str = "triage",
+          flag_format: str = "") -> dict:
     """Run the pipeline with an optional briefing driving format + AI context.
     With no target but a briefing, runs the common (no-file) text pipeline.
+    An explicit `flag_format` (from the UI field) overrides everything.
     When `event` is set and a flag is found, auto-saves it to the Vault + writeup."""
     description = (description or "").strip()
     _SOLVE_LOCK.acquire()
@@ -151,7 +168,10 @@ def solve(target: str, description: str = "", use_ai: bool = False,
     set_fmt = False
     example = None
     try:
-        if description and not old_fmt:
+        if flag_format and flag_format.strip():
+            os.environ["CTF_FLAG_FORMAT"] = _format_to_regex(flag_format)
+            set_fmt = True
+        elif description and not old_fmt:
             fmt, example = _derive_format(description)
             if fmt:
                 os.environ["CTF_FLAG_FORMAT"] = fmt
@@ -190,16 +210,19 @@ def solve(target: str, description: str = "", use_ai: bool = False,
         return res
     finally:
         if set_fmt:
-            os.environ.pop("CTF_FLAG_FORMAT", None)
+            if old_fmt is not None:
+                os.environ["CTF_FLAG_FORMAT"] = old_fmt
+            else:
+                os.environ.pop("CTF_FLAG_FORMAT", None)
         _SOLVE_LOCK.release()
 
 
 def deep(target: str, description: str, provider: str,
-         category: str = "auto", event: str = "") -> dict:
+         category: str = "auto", event: str = "", flag_format: str = "") -> dict:
     """Fast triage, then actually RUN the chosen agent (claude/agy, bounded — no
     skip-permissions) to try to capture the flag."""
     res = solve(target, description, use_ai=False, category=category,
-                event=event, engine=provider)
+                event=event, engine=provider, flag_format=flag_format)
     subject = target or f"(no file) {description[:120]}"
     ag = agents.run(provider, subject, (description or "").strip(),
                     res.get("markdown", ""), res["workdir"], category)
@@ -351,7 +374,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, solve(target, desc, bool(data.get("ai")),
                                              data.get("category", "auto"),
                                              data.get("event", ""),
-                                             "local" if data.get("ai") else "triage"))
+                                             "local" if data.get("ai") else "triage",
+                                             data.get("flag_format", "")))
             if path == "/api/upload":
                 os.makedirs(UPLOADS, exist_ok=True)
                 fname = _safe_name(self.headers.get("X-Filename", "upload.bin"))
@@ -362,9 +386,10 @@ class Handler(BaseHTTPRequestHandler):
                 desc = q.get("desc", [""])[0]
                 cat = q.get("category", ["auto"])[0]
                 ev = q.get("event", [""])[0]
+                fmt = q.get("flag_format", [""])[0]
                 ai_on = self.headers.get("X-Ai") == "1"
                 return self._send(200, solve(dest, desc, ai_on, cat, ev,
-                                             "local" if ai_on else "triage"))
+                                             "local" if ai_on else "triage", fmt))
             if path == "/api/deep":
                 data = json.loads(self._read_body() or b"{}")
                 target = (data.get("target") or "").strip()
@@ -374,7 +399,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(400, {"error": "give a target or a briefing"})
                 return self._send(200, deep(target, desc, provider,
                                             data.get("category", "auto"),
-                                            data.get("event", "")))
+                                            data.get("event", ""),
+                                            data.get("flag_format", "")))
             if path == "/api/event/delete":
                 data = json.loads(self._read_body() or b"{}")
                 ok = vault.delete_event(data.get("event_id", ""))
