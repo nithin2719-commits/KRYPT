@@ -181,7 +181,10 @@
   .drop{margin-top:24px;border:1.5px dashed var(--line);border-radius:12px;padding:30px;text-align:center;
     color:var(--muted);transition:.15s;cursor:pointer;background:rgba(255,255,255,.015);font-size:13px}
   .drop.hot{border-color:var(--line2);color:var(--fg);background:rgba(255,255,255,.05);box-shadow:inset 0 0 34px rgba(255,255,255,.06)}
+  .drop.staged{border-style:solid;border-color:var(--fg2);color:var(--fg);background:rgba(255,255,255,.04);line-height:1.9}
   .drop b{color:var(--fg2)}
+  .rmfile{cursor:pointer;text-decoration:underline;color:var(--muted)}
+  .rmfile:hover{color:var(--fg)}
   kbd{font-family:var(--mono);font-size:10px;color:var(--fg2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;background:#050505}
 
   .scan{display:none;margin-top:18px;height:3px;border-radius:3px;overflow:hidden;background:#141416}
@@ -518,14 +521,20 @@ async function hunt(target,file){
   }catch(e){render({error:String(e)});}
   busy(false);
 }
-/* HUNT works with a target OR just a briefing (no-file / common box) */
-function solveTarget(){const v=$("#target").value.trim(),d=$("#desc").value.trim();if(v||d)hunt(v||null,null);}
+/* HUNT only runs on an explicit click (or Ctrl/Enter). An attached file is held
+   until then, so you can set FLAG FMT + briefing first. File > target > briefing. */
+function solveTarget(){
+  const v=$("#target").value.trim(), d=$("#desc").value.trim();
+  if(STAGED){hunt(null,STAGED);return;}
+  if(v||d){hunt(v||null,null);return;}
+  toast("attach a file, or type a target / briefing first");
+}
 go.onclick=solveTarget;
 function onKey(e){
   if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();solveTarget();}
   else if(e.key==="Enter"&&e.target.id==="target"&&!e.shiftKey){e.preventDefault();solveTarget();}
   else if(e.key==="Enter"&&e.target.id==="fmt"&&!e.shiftKey){e.preventDefault();solveTarget();}
-  else if(e.key==="Escape"){$("#target").value="";$("#desc").value="";$("#fmt").value="";out.style.display="none";document.body.classList.remove("has-results");}
+  else if(e.key==="Escape"){$("#target").value="";$("#desc").value="";$("#fmt").value="";clearFile();out.style.display="none";document.body.classList.remove("has-results");}
 }
 $("#target").addEventListener("keydown",onKey); $("#desc").addEventListener("keydown",onKey); $("#fmt").addEventListener("keydown",onKey);
 
@@ -538,8 +547,18 @@ try{const lf=localStorage.getItem("krypt_fmt"); if(lf)$("#fmt").value=lf;}catch(
 /* drag & drop — the WHOLE window is a drop target; a drag-counter avoids the
    flicker you get when the pointer crosses child elements. Drop anywhere. */
 const drop=$("#drop"), overlay=$("#dropoverlay"), fi=document.createElement("input"); fi.type="file";
+let STAGED=null;
+const DROP_IDLE='⇩ &nbsp;drop or click to attach a challenge file &nbsp;<b>binary · image · pcap · archive · cipher</b>';
+function fsize(n){return n>=1048576?(n/1048576).toFixed(1)+" MB":Math.max(1,Math.ceil(n/1024))+" KB";}
+function stageFile(f){
+  STAGED=f; drop.classList.add("staged");
+  drop.innerHTML='◉ &nbsp;<b>'+esc(f.name)+'</b> &nbsp;<span style="color:var(--muted)">('+fsize(f.size)+')</span>'
+    +' &nbsp;<span class="rmfile" id="rmfile">✕ remove</span><br><span style="color:var(--muted);font-size:11px">attached — set FLAG FMT / briefing, then press HUNT</span>';
+  const rm=$("#rmfile"); if(rm) rm.onclick=(e)=>{e.stopPropagation();clearFile();};
+}
+function clearFile(){STAGED=null; drop.classList.remove("staged"); drop.innerHTML=DROP_IDLE;}
 drop.onclick=()=>fi.click();
-fi.onchange=()=>{ if(fi.files[0]) hunt(null,fi.files[0]); fi.value=""; };
+fi.onchange=()=>{ if(fi.files[0]) stageFile(fi.files[0]); fi.value=""; };
 let dragN=0;
 const hasFiles=e=>{try{return Array.from(e.dataTransfer.types||[]).includes("Files");}catch(_){return false;}};
 addEventListener("dragenter",e=>{ if(!hasFiles(e))return; e.preventDefault(); dragN++; overlay.classList.add("show"); });
@@ -547,7 +566,16 @@ addEventListener("dragover", e=>{ if(!hasFiles(e))return; e.preventDefault(); tr
 addEventListener("dragleave",e=>{ if(!hasFiles(e))return; dragN=Math.max(0,dragN-1); if(!dragN) overlay.classList.remove("show"); });
 addEventListener("dragend",  ()=>{ dragN=0; overlay.classList.remove("show"); });
 addEventListener("drop",     e=>{ e.preventDefault(); dragN=0; overlay.classList.remove("show");
-  const f=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) hunt(null,f); });
+  const f=e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if(f) stageFile(f); });
+
+/* paste a copied file/image (Ctrl+V) straight in — it ATTACHES, never hunts.
+   Pasting plain text is left alone so the briefing box still works normally. */
+addEventListener("paste", e=>{
+  const cd=e.clipboardData; if(!cd) return;
+  let f = cd.files && cd.files[0];
+  if(!f && cd.items){ for(const it of cd.items){ if(it.kind==="file"){ f=it.getAsFile(); break; } } }
+  if(f){ stageFile(f); toast("attached pasted file  "+f.name); }
+});
 
 /* ---- VAULT: events · flags · writeups ---- */
 let VAULT_DATA={events:[]}, VSEL=null;

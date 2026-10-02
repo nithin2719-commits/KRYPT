@@ -171,6 +171,9 @@ def solve(target: str, description: str = "", use_ai: bool = False,
         if flag_format and flag_format.strip():
             os.environ["CTF_FLAG_FORMAT"] = _format_to_regex(flag_format)
             set_fmt = True
+            # exclude the literal format the operator typed (e.g. POCTF{...}) so
+            # it can never be reported back as the captured flag.
+            example = flag_format.strip()
         elif description and not old_fmt:
             fmt, example = _derive_format(description)
             if fmt:
