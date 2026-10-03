@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+# ghidra MCP runtime locks (transient)
+pyghidra_mcp_projects/*.lock
+pyghidra_mcp_projects/*.lock~
