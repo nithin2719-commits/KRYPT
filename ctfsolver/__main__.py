@@ -20,7 +20,8 @@ import sys
 
 from . import flags as flagmod
 from .detect import classify
-from .triage import archive, audio, binary, crypto, generic, image, netcat, pcap, web
+from .triage import (archive, audio, binary, crypto, generic, image, netcat,
+                     pcap, pdf, web)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKSPACE = os.path.join(ROOT, "workspace")
@@ -32,6 +33,7 @@ FILE_ROUTER = {
     "audio": audio,
     "archive": archive,
     "pcap": pcap,
+    "pdf": pdf,
     "text": crypto,
     "data": crypto,
 }
@@ -112,14 +114,14 @@ def run_pipeline(arg: str, depth: int = 0, seen: set | None = None,
                                  "http(s) URL, or host:port.",
                       "output": "", "flags": []})
 
-    # aggregate + rank flags
-    seen: dict[str, dict] = {}
+    # aggregate + rank flags (distinct from the sha1 dedup `seen` set above)
+    agg: dict[str, dict] = {}
     for st in steps:
         for f in st.get("flags", []) or []:
-            cur = seen.get(f["flag"])
+            cur = agg.get(f["flag"])
             if not cur or f["confidence"] > cur["confidence"]:
-                seen[f["flag"]] = {**f, "source": st["step"]}
-    ranked = sorted(seen.values(), key=lambda d: -d["confidence"])
+                agg[f["flag"]] = {**f, "source": st["step"]}
+    ranked = sorted(agg.values(), key=lambda d: -d["confidence"])
 
     return {"target": t.__dict__, "workdir": workdir,
             "steps": steps, "flags": ranked}
