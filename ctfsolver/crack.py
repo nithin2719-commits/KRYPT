@@ -7,6 +7,7 @@ is time-boxed.
 from __future__ import annotations
 
 import os
+import re
 
 from .runner import have, run
 
@@ -28,6 +29,31 @@ def _john(hash_file: str, fmt: str | None = None, timeout: int = 150) -> dict:
     return {"ok": show.ok(), "output": show.stdout}
 
 
+def _extract_password(show_output: str) -> str:
+    """Pull the password out of `john --show` output.
+
+    Lines look like ``<name>:<password>`` or, with trailing metadata,
+    ``<name>:<password>:::::<name>``. The password itself may contain ':', so
+    drop the leading name field and strip the trailing ``:::...`` metadata
+    rather than taking a fixed column (the old ``split(':')[1]`` truncated any
+    password with a colon in it).
+    """
+    for line in show_output.splitlines():
+        line = line.rstrip("\n")
+        if ":" not in line:
+            continue
+        low = line.lower()
+        if low.startswith(("0 ", "no ")) or " password hash" in low:
+            continue  # summary lines ("1 password hash cracked, 0 left")
+        _name, _, rest = line.partition(":")
+        # strip a trailing run of colons + optional non-colon field (the
+        # repeated filename / empty metadata john appends)
+        pw = re.sub(r":+[^:]*$", "", rest) if ":" in rest else rest
+        if pw:
+            return pw
+    return ""
+
+
 def crack_zip(path: str, workdir: str) -> dict:
     """zip2john -> john; on success, extract with the recovered password."""
     if not have("zip2john"):
@@ -38,13 +64,7 @@ def crack_zip(path: str, workdir: str) -> dict:
     with open(hf, "w") as fh:
         fh.write(h.stdout)
     res = _john(hf)
-    pw = ""
-    for line in res.get("output", "").splitlines():
-        if ":" in line and not line.startswith(("0 password", "No password")):
-            parts = line.split(":")
-            if len(parts) >= 2:
-                pw = parts[1]
-                break
+    pw = _extract_password(res.get("output", ""))
     out = f"recovered password: {pw!r}" if pw else "no password found in rockyou"
     artifacts = []
     if pw and have("7z"):

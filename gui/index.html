@@ -185,6 +185,22 @@
   .drop b{color:var(--fg2)}
   .rmfile{cursor:pointer;text-decoration:underline;color:var(--muted)}
   .rmfile:hover{color:var(--fg)}
+  /* multi-session tabs */
+  .sessbar{display:flex;align-items:center;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap}
+  .tab{display:flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid var(--line);
+    border-radius:8px;background:#060606;color:var(--muted);cursor:pointer;font:12px var(--mono);white-space:nowrap}
+  .tab:hover{border-color:var(--line2);color:var(--fg2)}
+  .tab.active{border-color:var(--fg2);color:var(--fg);background:rgba(255,255,255,.05)}
+  .tab .tabmark{color:var(--fg2);font-size:11px}
+  .tab .x{opacity:.45;font-size:13px;padding:0 1px}
+  .tab .x:hover{opacity:1}
+  .tabadd{padding:6px 11px;border:1px dashed var(--line);border-radius:8px;background:none;
+    color:var(--muted);cursor:pointer;font:12px var(--mono)}
+  .tabadd:hover{color:var(--fg);border-color:var(--fg2)}
+  .usagehud{margin-left:auto;font:11px var(--mono);color:var(--muted);cursor:pointer;letter-spacing:.3px}
+  .usagehud b{color:var(--fg2)}
+  .usagehud.warn b{color:var(--fg)}
   kbd{font-family:var(--mono);font-size:10px;color:var(--fg2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;background:#050505}
 
   .scan{display:none;margin-top:18px;height:3px;border-radius:3px;overflow:hidden;background:#141416}
@@ -279,6 +295,12 @@
 <button class="vaultbtn" id="vaultbtn" title="Your saved events, flags &amp; writeups">◆ VAULT<b id="vaultn">0</b></button>
 <div class="wrap">
   <header><div class="brand"><span class="gtxt" id="brandglitch" data-text="KRYPT">KRYPT</span><span class="tag">FLAG HUNTER</span></div></header>
+
+  <div class="sessbar">
+    <div class="tabs" id="tabs"></div>
+    <button class="tabadd" id="tabadd" title="Open a new challenge chat">+ chat</button>
+    <span class="usagehud" id="usagehud" title="API credit usage — click for all accounts"></span>
+  </div>
 
   <div class="console">
     <div class="clabel">TARGET ACQUISITION</div>

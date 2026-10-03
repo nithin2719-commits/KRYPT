@@ -42,8 +42,19 @@ def best_model() -> str:
     return names[0] if names else "qwen2.5-coder:7b"
 
 
-# Resolved once at import; the health endpoint reports it as the LOCAL engine.
-DEFAULT_MODEL = best_model()
+# Resolved lazily (and cached) on first use — importing this module must NOT
+# make a network call, or every GUI/CLI startup blocks on the Ollama probe
+# (up to 3s) when Ollama is down.
+_MODEL_CACHE: str | None = None
+
+
+def default_model() -> str:
+    """The model the LOCAL engine will use; resolved once, then cached."""
+    global _MODEL_CACHE
+    if _MODEL_CACHE is None:
+        _MODEL_CACHE = best_model()
+    return _MODEL_CACHE
+
 
 SYSTEM = (
     "You are a CTF assistant. Given triage evidence from a challenge, state the "
@@ -53,7 +64,8 @@ SYSTEM = (
 )
 
 
-def available(model: str = DEFAULT_MODEL) -> bool:
+def available(model: str | None = None) -> bool:
+    model = model or default_model()
     try:
         with urllib.request.urlopen(f"{HOST}/api/tags", timeout=3) as r:
             tags = json.load(r)
@@ -63,7 +75,8 @@ def available(model: str = DEFAULT_MODEL) -> bool:
         return False
 
 
-def ask(evidence: str, model: str = DEFAULT_MODEL, timeout: int = 120) -> str:
+def ask(evidence: str, model: str | None = None, timeout: int = 120) -> str:
+    model = model or default_model()
     payload = {
         "model": model,
         "system": SYSTEM,

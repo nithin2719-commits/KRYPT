@@ -114,7 +114,9 @@ def triage(path: str, workdir: str) -> list[dict]:
             if not decs:
                 break
             method, text = decs[0]
-            fl = scan_text(text)
+            # decoded layers are noisy — scan strictly (named + custom only),
+            # like the magic engine, so e.g. rot13 of code can't invent a flag.
+            fl = scan_text(text, strict=True)
             steps.append({"step": f"decode-L{layer + 1}({method})",
                           "summary": f"decoded {len(text)} chars",
                           "output": text[:1000], "flags": fl})

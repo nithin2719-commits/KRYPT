@@ -104,8 +104,7 @@ solves, read writeups, and **export** any writeup (or a whole event) as
 ## Tests
 
 ```bash
-python tests/test_decoders.py
-python tests/test_vault.py
-python tests/test_categories.py
+python -m pytest            # whole suite
+python tests/test_decoders.py   # or run one file directly
 ```
-CI runs these on every push (see `ci/tests.yml`).
+CI runs the full suite on every push (see `ci/tests.yml`).

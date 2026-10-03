@@ -23,8 +23,21 @@ import urllib.request
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 CFG_PATH = os.path.expanduser("~/.config/krypt/config.json")
+USAGE_PATH = os.path.expanduser("~/.config/krypt/usage.json")
 DEFAULT_MODEL = os.environ.get("KRYPT_API_MODEL", "claude-opus-5")
 MAX_IMAGE_BYTES = 3_500_000  # ~3.5MB raw -> ~4.7MB base64, under the API's 5MB cap
+
+# $ per 1M tokens (input, output). The Messages API does not return an account
+# credit balance, so KRYPT estimates spend from returned token usage × these
+# rates and tracks it locally against a per-account budget you set.
+PRICES = {
+    "claude-opus-5": (5.0, 25.0), "claude-opus-4-8": (5.0, 25.0),
+    "claude-opus-4-7": (5.0, 25.0), "claude-opus-4-6": (5.0, 25.0),
+    "claude-sonnet-5": (2.0, 10.0), "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-haiku-4-5": (1.0, 5.0),
+    "claude-fable-5-1": (10.0, 50.0), "claude-fable-5": (10.0, 50.0),
+}
+DEFAULT_PRICE = (5.0, 25.0)
 
 _IMG_MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
               ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/png"}
@@ -52,19 +65,114 @@ SYSTEM = (
 )
 
 
-def _load_key() -> str:
-    k = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
-    if k:
-        return k
+def _load_accounts() -> list:
+    """Accounts to rotate through, in priority order. Supports:
+      {"anthropic_api_keys": [{"name","key","budget_usd"}, ...]}  (multi-account)
+      {"anthropic_api_key": "sk-ant-..."}                         (single, legacy)
+      $ANTHROPIC_API_KEY                                          (env)
+    budget_usd None/absent = unlimited."""
+    accts, seen = [], set()
+    cfg = {}
     try:
         with open(CFG_PATH) as fh:
-            return (json.load(fh).get("anthropic_api_key") or "").strip()
+            cfg = json.load(fh)
     except Exception:
-        return ""
+        cfg = {}
+    for a in (cfg.get("anthropic_api_keys") or []):
+        key = (a.get("key") or "").strip()
+        if key and key not in seen:
+            seen.add(key)
+            accts.append({"name": a.get("name") or f"acct{len(accts)+1}",
+                          "key": key, "budget_usd": a.get("budget_usd")})
+    single = (cfg.get("anthropic_api_key") or "").strip()
+    if single and single not in seen:
+        seen.add(single)
+        accts.append({"name": "default", "key": single, "budget_usd": None})
+    env = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+    if env and env not in seen:
+        accts.append({"name": "env", "key": env, "budget_usd": None})
+    return accts
+
+
+def _load_usage() -> dict:
+    try:
+        with open(USAGE_PATH) as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def _save_usage(u: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(USAGE_PATH), exist_ok=True)
+        tmp = USAGE_PATH + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(u, fh)
+        os.replace(tmp, USAGE_PATH)
+    except Exception:
+        pass
+
+
+def _cost(model: str, usage: dict) -> float:
+    pin, pout = PRICES.get(model, DEFAULT_PRICE)
+    it = usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0) \
+        + usage.get("cache_creation_input_tokens", 0)
+    ot = usage.get("output_tokens", 0)
+    return it / 1e6 * pin + ot / 1e6 * pout
+
+
+def _record(name: str, model: str, usage: dict) -> float:
+    cost = _cost(model, usage)
+    u = _load_usage()
+    rec = u.get(name) or {"input_tokens": 0, "output_tokens": 0,
+                          "cost_usd": 0.0, "requests": 0}
+    rec["input_tokens"] += usage.get("input_tokens", 0)
+    rec["output_tokens"] += usage.get("output_tokens", 0)
+    rec["cost_usd"] = round(rec["cost_usd"] + cost, 6)
+    rec["requests"] += 1
+    u[name] = rec
+    _save_usage(u)
+    return cost
+
+
+def _spent(name: str) -> float:
+    return float((_load_usage().get(name) or {}).get("cost_usd", 0.0))
+
+
+def _has_budget(acct: dict) -> bool:
+    b = acct.get("budget_usd")
+    return b is None or _spent(acct["name"]) < float(b)
+
+
+def _pick_account(exclude=()):
+    """First account (in config order) that still has budget; else the one with the
+    most headroom; else None."""
+    accts = [a for a in _load_accounts() if a["key"] not in exclude]
+    if not accts:
+        return None
+    for a in accts:
+        if _has_budget(a):
+            return a
+    return None
 
 
 def available() -> bool:
-    return bool(_load_key())
+    return bool(_load_accounts())
+
+
+def status() -> dict:
+    """Per-account spend/budget/remaining for the UI."""
+    out = []
+    for a in _load_accounts():
+        spent = _spent(a["name"])
+        b = a.get("budget_usd")
+        out.append({"name": a["name"], "budget_usd": b,
+                    "spent_usd": round(spent, 4),
+                    "remaining_usd": (None if b is None else round(float(b) - spent, 4)),
+                    "has_budget": _has_budget(a)})
+    active = _pick_account()
+    return {"accounts": out, "active": active["name"] if active else None,
+            "model": DEFAULT_MODEL}
 
 
 def _fmt_regex(fmt: str) -> str:
@@ -137,12 +245,13 @@ def solve(target: str, briefing: str, evidence: str, flag_format: str = "",
           timeout: int = 300) -> dict:
     """Send the challenge (image + text context) to Claude and return the flag.
 
-    Returns {ok, flag, output, error, model, usage}."""
-    key = _load_key()
-    if not key:
+    Rotates across configured accounts by remaining credit, failing over to the
+    next on a 429/credit error. Records token usage + estimated cost per account.
+    Returns {ok, flag, output, error, model, usage, cost_usd, account}."""
+    if not _load_accounts():
         return {"ok": False, "flag": None, "output": "",
-                "error": "no API key — set ANTHROPIC_API_KEY or put "
-                         '{"anthropic_api_key": "sk-ant-..."} in ~/.config/krypt/config.json'}
+                "error": "no API key — put {\"anthropic_api_key\": \"sk-ant-...\"} (or "
+                         "an \"anthropic_api_keys\" list) in ~/.config/krypt/config.json"}
     model = model or DEFAULT_MODEL
     parts = []
     img = _image_block(target) if (target and os.path.isfile(target)) else None
@@ -163,33 +272,49 @@ def solve(target: str, briefing: str, evidence: str, flag_format: str = "",
                    "including faint, marginal, decorative, or emphasised text.")
     parts.append({"type": "text", "text": "\n\n".join(ctx)})
 
-    body = {
+    body = json.dumps({
         "model": model,
         "max_tokens": 8000,
         "system": SYSTEM,
         "thinking": {"type": "adaptive"},
         "messages": [{"role": "user", "content": parts}],
-    }
-    req = urllib.request.Request(
-        API_URL, json.dumps(body).encode(),
-        {"content-type": "application/json", "x-api-key": key,
-         "anthropic-version": API_VERSION})
-    try:
-        resp = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", "replace")[:600]
-        return {"ok": False, "flag": None, "output": "",
-                "error": f"API HTTP {e.code}: {detail}", "model": model}
-    except Exception as e:
-        return {"ok": False, "flag": None, "output": "",
-                "error": f"{type(e).__name__}: {e}", "model": model}
+    }).encode()
 
-    if resp.get("stop_reason") == "refusal":
-        return {"ok": False, "flag": None, "output": "",
-                "error": "model declined this request (refusal)", "model": model}
-    text = "".join(b.get("text", "") for b in resp.get("content", [])
-                   if b.get("type") == "text").strip()
-    flag = _extract_flag(text, flag_format)
-    return {"ok": bool(flag), "flag": flag, "output": text or "(no text returned)",
-            "error": "" if text else "empty response", "model": model,
-            "usage": resp.get("usage", {})}
+    tried, last_err = set(), "no usable account"
+    while True:
+        acct = _pick_account(exclude=tried)
+        if not acct:
+            return {"ok": False, "flag": None, "output": "",
+                    "error": f"all accounts exhausted or failing ({last_err})",
+                    "model": model}
+        tried.add(acct["key"])
+        req = urllib.request.Request(
+            API_URL, body,
+            {"content-type": "application/json", "x-api-key": acct["key"],
+             "anthropic-version": API_VERSION})
+        try:
+            resp = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", "replace")[:400]
+            last_err = f"{acct['name']}: HTTP {e.code} {detail}"
+            # 429 rate-limit or 400/402 credit issues -> fail over to next account
+            if e.code in (429, 402, 529) or "credit" in detail.lower():
+                continue
+            return {"ok": False, "flag": None, "output": "",
+                    "error": f"API {last_err}", "model": model, "account": acct["name"]}
+        except Exception as e:
+            last_err = f"{acct['name']}: {type(e).__name__}: {e}"
+            continue
+
+        if resp.get("stop_reason") == "refusal":
+            return {"ok": False, "flag": None, "output": "", "account": acct["name"],
+                    "error": "model declined this request (refusal)", "model": model}
+        usage = resp.get("usage", {}) or {}
+        cost = _record(acct["name"], model, usage)
+        text = "".join(b.get("text", "") for b in resp.get("content", [])
+                       if b.get("type") == "text").strip()
+        flag = _extract_flag(text, flag_format)
+        return {"ok": bool(flag), "flag": flag,
+                "output": text or "(no text returned)",
+                "error": "" if text else "empty response", "model": model,
+                "usage": usage, "cost_usd": round(cost, 4), "account": acct["name"]}

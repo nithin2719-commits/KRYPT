@@ -243,6 +243,11 @@ def deep(target: str, description: str, provider: str,
         note = ("" if r.get("output") else r.get("error", ""))
         ag = {"ok": r.get("ok", False), "provider": "api",
               "output": r.get("output", "") or note, "error": r.get("error", "")}
+        u = r.get("usage") or {}
+        res["usage"] = {"account": r.get("account"), "model": r.get("model"),
+                        "input_tokens": u.get("input_tokens", 0),
+                        "output_tokens": u.get("output_tokens", 0),
+                        "cost_usd": r.get("cost_usd", 0)}
     elif provider == "agy":
         # agy has no read-only allowlist; running it unattended would need blanket
         # --dangerously-skip-permissions, which auto-approves its full offensive
@@ -389,7 +394,11 @@ class Handler(BaseHTTPRequestHandler):
             engines = agents.available()
             engines["api"] = ai_api.available()
             self._send(200, {"ok": True, "ollama": model, "engines": engines,
-                             "api_model": ai_api.DEFAULT_MODEL})
+                             "api_model": ai_api.DEFAULT_MODEL,
+                             "credits": ai_api.status()})
+        elif path == "/api/usage":
+            from ctfsolver import ai_api
+            self._send(200, ai_api.status())
         elif path == "/api/events":
             self._send(200, vault.list_events())
         elif path == "/api/writeup":

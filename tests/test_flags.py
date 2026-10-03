@@ -43,3 +43,23 @@ def test_rejects_plain_word_braces():
     assert _f("card{active}") == []
     assert _f("style{color}") == []
     assert _f('int main(){char buf[64];}') == []
+
+
+def test_rejects_code_with_underscore_or_digit():
+    # The old fallback flagged any word{...} whose body had a '_' or digit,
+    # inventing flags from ordinary code/markup. These must stay empty.
+    assert _f("struct Point{x_0}") == []
+    assert _f("d = dict{key_1}") == []
+    assert _f(r"\frac{a_1}{b_2}") == []
+    assert _f("config{debug_mode}") == []
+    assert _f("s = set{a_1}") == []
+    assert _f("div{margin_0}") == []
+    assert _f("arr{i_0}") == []
+
+
+def test_rejects_allcaps_macro_braces():
+    # An uppercase wrapper alone isn't enough — the body must have a lowercase
+    # letter, and an underscore in the wrapper means a macro, not an acronym.
+    assert _f("#define MAX{BUF_SIZE}") == []
+    assert _f("TODO{FIXME}") == []
+    assert _f("#define MAX_BUF{SIZE_256}") == []
