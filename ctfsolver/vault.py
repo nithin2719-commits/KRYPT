@@ -179,31 +179,6 @@ def add_solve(event_name: str, res: dict, flag: str, engine: str = "triage",
     return {"event_id": ev["id"], "solve_id": solve_id, "duplicate": False}
 
 
-def add_manual(event_name: str, flag: str, category: str = "misc",
-               note: str = "", target: str = "manual entry",
-               submission: str = "", event_id: str = "") -> dict:
-    """Save a hand-entered flag to the Vault (+ writeup), reusing add_solve.
-
-    `note` becomes the briefing; `submission` (e.g. "submitted to CTFd → correct")
-    is appended to the method log so the writeup records the scoreboard verdict.
-    """
-    flag = (flag or "").strip()
-    if not flag:
-        return {"error": "no flag"}
-    summary = note.strip() or "flag entered by operator"
-    if submission:
-        summary += f" · {submission}"
-    res = {
-        "target": {"raw": target or "manual entry", "kind": "manual",
-                   "subkind": (category or "misc")},
-        "steps": [{"step": "manual-entry", "summary": summary,
-                   "output": (note or "").strip(),
-                   "flags": [{"flag": flag}]}],
-        "briefing": (note or "").strip(),
-    }
-    return add_solve(event_name, res, flag, engine="manual", event_id=event_id)
-
-
 def get_writeup(solve_id: str) -> str:
     if not re.fullmatch(r"[0-9a-f]{6,32}", solve_id or ""):
         return ""

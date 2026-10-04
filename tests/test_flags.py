@@ -63,30 +63,3 @@ def test_rejects_allcaps_macro_braces():
     assert _f("#define MAX{BUF_SIZE}") == []
     assert _f("TODO{FIXME}") == []
     assert _f("#define MAX_BUF{SIZE_256}") == []
-
-
-# -- validate_flag: manual-entry gate for the FLAG tool --------------------- #
-from ctfsolver.flags import validate_flag  # noqa: E402
-
-
-def test_validate_accepts_named_flag():
-    r = validate_flag("flag{hello}")
-    assert r["valid"] and r["kind"] == "named"
-
-
-def test_validate_rejects_prose():
-    assert not validate_flag("this is not a flag")["valid"]
-
-
-def test_validate_rejects_newline():
-    assert not validate_flag("flag{a\nb}")["valid"]
-
-
-def test_validate_format_match_and_mismatch():
-    assert validate_flag("POCTF{x_y}", "POCTF{...}")["valid"]
-    assert not validate_flag("flag{x}", "POCTF{...}")["valid"]
-
-
-def test_validate_format_accepts_real_regex():
-    assert validate_flag("FLAG{abc}", r"FLAG\{[a-z]+\}")["valid"]
-    assert not validate_flag("FLAG{ABC}", r"FLAG\{[a-z]+\}")["valid"]

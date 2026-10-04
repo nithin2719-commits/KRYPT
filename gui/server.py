@@ -28,8 +28,8 @@ UPLOADS = os.path.join(GUI, "uploads")
 sys.path.insert(0, ROOT)
 
 from ctfsolver.__main__ import run_pipeline, to_markdown, WORKSPACE  # noqa: E402
-from ctfsolver import ai, agents, categories, vault, export, submit  # noqa: E402
-from ctfsolver.flags import scan_text, validate_flag  # noqa: E402
+from ctfsolver import ai, agents, categories, vault, export  # noqa: E402
+from ctfsolver.flags import scan_text  # noqa: E402
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("CTF_GUI_PORT", "8777"))
@@ -401,9 +401,6 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, ai_api.status())
         elif path == "/api/events":
             self._send(200, vault.list_events())
-        elif path == "/api/flag/config":
-            self._send(200, {"scoreboard": submit.load_scoreboard(),
-                             "platforms": list(submit.PLATFORMS)})
         elif path == "/api/writeup":
             sid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
             self._send(200, {"id": sid, "writeup": vault.get_writeup(sid)})
@@ -508,46 +505,6 @@ class Handler(BaseHTTPRequestHandler):
                 if provider == "all":
                     return self._send(200, escalate(target, desc, cat, ev, fmt))
                 return self._send(200, deep(target, desc, provider, cat, ev, fmt))
-            if path == "/api/flag/verify":
-                data = json.loads(self._read_body() or b"{}")
-                return self._send(200, validate_flag(data.get("flag", ""),
-                                                      data.get("format", "")))
-            if path == "/api/flag/save":
-                data = json.loads(self._read_body() or b"{}")
-                flag = (data.get("flag") or "").strip()
-                event = (data.get("event") or "").strip()
-                if not flag:
-                    return self._send(400, {"error": "no flag"})
-                if not event:
-                    return self._send(400, {"error": "name an event to save under"})
-                saved = vault.add_manual(event, flag,
-                                         data.get("category", "misc"),
-                                         data.get("note", ""),
-                                         data.get("target", "manual entry"),
-                                         data.get("submission", ""))
-                return self._send(200, {"saved": saved})
-            if path == "/api/flag/submit":
-                data = json.loads(self._read_body() or b"{}")
-                flag = (data.get("flag") or "").strip()
-                if not flag:
-                    return self._send(400, {"error": "no flag"})
-                result = submit.submit_flag(
-                    flag,
-                    platform=data.get("platform", "ctfd"),
-                    url=data.get("url", ""),
-                    token=data.get("token", ""),
-                    challenge_id=data.get("challenge_id", ""),
-                    field=data.get("field", "flag"),
-                    remember=bool(data.get("remember")))
-                # when it scores (or was already solved), record it in the Vault
-                event = (data.get("event") or "").strip()
-                if event and result.get("status") in ("correct", "already_solved"):
-                    verdict = f"submitted to {result['platform'].upper()} → {result['status']}"
-                    result["saved"] = vault.add_manual(
-                        event, flag, data.get("category", "misc"),
-                        data.get("note", ""), data.get("target", "manual entry"),
-                        verdict)
-                return self._send(200, result)
             if path == "/api/event/delete":
                 data = json.loads(self._read_body() or b"{}")
                 ok = vault.delete_event(data.get("event_id", ""))

@@ -1,5 +1,7 @@
 # KRYPT
 
+[![tests](https://github.com/nithin2719-commits/KRYPT/actions/workflows/tests.yml/badge.svg)](https://github.com/nithin2719-commits/KRYPT/actions/workflows/tests.yml)
+
 Autonomous **CTF triage & flag hunter**. Give it a file, URL, or `host:port`; it
 classifies the challenge, runs the right tools, sweeps everything for flags, and
 writes a report — so expensive human/agent reasoning only starts where the cheap
@@ -107,4 +109,4 @@ solves, read writeups, and **export** any writeup (or a whole event) as
 python -m pytest            # whole suite
 python tests/test_decoders.py   # or run one file directly
 ```
-CI runs the full suite on every push (see `ci/tests.yml`).
+CI runs the full suite on every push (see `.github/workflows/tests.yml`).
