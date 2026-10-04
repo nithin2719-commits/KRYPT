@@ -127,6 +127,69 @@ def scan_text(text: str, strict: bool = False) -> list[dict]:
     return sorted(vals, key=lambda d: -d["confidence"])
 
 
+def _fmt_to_regex(fmt: str) -> str:
+    """Turn an operator-typed flag format into an anchored regex.
+
+    Accepts either a ready regex (contains a real char class / quantifier) or a
+    friendly template like `picoCTF{...}`, `flag{}` or `CTF{FILL}` — the inside
+    is treated as a placeholder and replaced with 'one or more non-}' so any
+    body matches. Mirrors how the sweep's _format_to_regex works in server.py.
+    """
+    fmt = (fmt or "").strip()
+    if not fmt:
+        return ""
+    # already a regex? (has a class/quantifier/escape beyond a plain wrapper)
+    if re.search(r"\[|\]|\\[dws]|\.\*|\.\+|\{\d|\(\?", fmt):
+        return fmt
+    m = re.match(r"^([^{]+)\{(.*)\}$", fmt)
+    if m:
+        return re.escape(m.group(1)) + r"\{[^}\n]{1,200}\}"
+    return re.escape(fmt)
+
+
+def validate_flag(flag: str, fmt: str = "") -> dict:
+    """Judge a manually-entered flag before you save or submit it.
+
+    -> {"valid": bool, "reason": str, "kind": str, "confidence": int}
+
+    With a format given, the flag must match it exactly (full-string). With no
+    format, it must look like a real flag — a known wrapper (flag{}, picoCTF{},
+    HTB{}…) or a clean custom acronym wrapper — not prose or a placeholder.
+    """
+    flag = (flag or "").strip()
+    if not flag:
+        return {"valid": False, "reason": "empty", "kind": "", "confidence": 0}
+    if "\n" in flag or "\r" in flag:
+        return {"valid": False, "reason": "flag contains a newline", "kind": "", "confidence": 0}
+    if len(flag) > 512:
+        return {"valid": False, "reason": "too long to be a flag", "kind": "", "confidence": 0}
+
+    if fmt and fmt.strip():
+        rx = _fmt_to_regex(fmt)
+        try:
+            if re.fullmatch(rx, flag):
+                return {"valid": True, "reason": f"matches format {fmt.strip()}",
+                        "kind": "custom", "confidence": 100}
+            return {"valid": False, "reason": f"does not match format {fmt.strip()}",
+                    "kind": "", "confidence": 0}
+        except re.error:
+            return {"valid": False, "reason": f"bad format regex: {fmt.strip()}",
+                    "kind": "", "confidence": 0}
+
+    # no declared format — is it a recognised flag on its own?
+    hits = scan_text(flag)
+    exact = next((h for h in hits if h["flag"] == flag), None)
+    if exact:
+        return {"valid": True, "reason": f"looks like a {exact['kind']} flag",
+                "kind": exact["kind"], "confidence": exact["confidence"]}
+    if "{" in flag and flag.endswith("}") and _valid(flag):
+        return {"valid": True, "reason": "wrapper{body} shape — no event format set to confirm it",
+                "kind": "shape", "confidence": 40}
+    return {"valid": False,
+            "reason": "doesn't look like a flag — set a FLAG FMT to confirm a custom format",
+            "kind": "", "confidence": 0}
+
+
 def scan_bytes(data: bytes) -> list[dict]:
     return scan_text(data.decode("latin-1", "replace"))
 

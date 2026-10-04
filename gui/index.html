@@ -142,6 +142,40 @@
     border-radius:9px;padding:9px 14px;cursor:pointer;transition:.14s}
   .vaultbtn:hover{box-shadow:0 0 16px rgba(255,255,255,.14);border-color:#fff}
   .vaultbtn b{color:var(--dim);font-weight:700;margin-left:6px}
+  #flagbtn{right:150px}
+  /* ---------- flag tool overlay ---------- */
+  #flagtool{position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.94);display:none;padding:34px 26px;overflow:auto}
+  #flagtool.open{display:block;animation:rise .25s ease both}
+  .ftwrap{max-width:640px;margin:0 auto}
+  .ftcard{border:1px solid var(--line2);border-radius:14px;background:var(--surface);padding:22px 24px;margin-top:16px}
+  .ftcard h3{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:3px;color:#fff;margin:0 0 4px}
+  .ftcard .sub{color:var(--muted);font-size:12px;margin-bottom:16px}
+  .ftrow{margin-bottom:13px}
+  .ftrow label{display:block;font-family:var(--display);font-weight:700;font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:6px}
+  .ftrow .field{margin:0}
+  .ftrow2{display:flex;gap:12px}.ftrow2>div{flex:1}
+  select.field{appearance:none;cursor:pointer}
+  .ftbtns{display:flex;gap:10px;margin-top:4px;flex-wrap:wrap}
+  .ftbtn{font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:2px;color:var(--fg);
+    background:var(--raise);border:1px solid var(--line2);border-radius:9px;padding:11px 18px;cursor:pointer;transition:.14s}
+  .ftbtn:hover{border-color:#fff;box-shadow:0 0 16px rgba(255,255,255,.14)}
+  .ftbtn.primary{background:#fff;color:#000;border-color:#fff}
+  .ftbtn.primary:hover{box-shadow:0 0 20px rgba(255,255,255,.28)}
+  .ftbtn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;border-color:var(--line)}
+  .ftcheck{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2);cursor:pointer;user-select:none}
+  .ftcheck input{accent-color:#fff;width:15px;height:15px}
+  .ftverdict{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:13px 16px;font-size:13px;
+    display:none;align-items:center;gap:11px;background:#050505}
+  .ftverdict.show{display:flex;animation:rise .18s ease both}
+  .ftverdict .ic{font-family:var(--display);font-weight:900;font-size:20px;line-height:1}
+  .ftverdict .msg{color:var(--fg2);line-height:1.5}.ftverdict .msg b{color:#fff}
+  .ftverdict.ok{border-color:#fff;background:rgba(255,255,255,.07)}
+  .ftverdict.ok .ic{color:#fff}
+  .ftverdict.no{border-color:var(--line2)}
+  .ftverdict.no .ic,.ftverdict.no .msg b{color:var(--dim)}
+  .ftverdict.warn{border-style:dashed;border-color:var(--line2)}
+  .fthint{color:var(--muted);font-size:11px;margin-top:5px;line-height:1.5}
+  .fthint code{color:var(--fg2)}
   #vault{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.94);display:none;padding:34px 26px;overflow:auto}
   #vault.open{display:block;animation:rise .25s ease both}
   .vhead{display:flex;align-items:center;gap:14px;max-width:1180px;margin:0 auto 22px}
@@ -292,6 +326,7 @@
   </div>
 </div>
 
+<button class="vaultbtn" id="flagbtn" title="Enter, verify &amp; submit a flag to the scoreboard">◇ FLAG</button>
 <button class="vaultbtn" id="vaultbtn" title="Your saved events, flags &amp; writeups">◆ VAULT<b id="vaultn">0</b></button>
 <div class="wrap">
   <header><div class="brand"><span class="gtxt" id="brandglitch" data-text="KRYPT">KRYPT</span><span class="tag">FLAG HUNTER</span></div></header>
@@ -372,6 +407,65 @@
       <div id="writeup"></div></div>
   </div>
 </div>
+<div id="flagtool">
+  <div class="vhead"><span class="vt">FLAG</span>
+    <span style="color:var(--muted);font-size:12px">enter · verify · save · submit to scoreboard</span>
+    <span class="vx" id="flagclose">✕ CLOSE</span></div>
+  <div class="ftwrap">
+    <div class="ftcard">
+      <h3>THE FLAG</h3>
+      <div class="sub">Paste a captured flag (or type one). Verify it against the format, then save it to the Vault.</div>
+      <div class="ftrow"><label>FLAG</label>
+        <input id="ftflag" class="field" spellcheck="false" placeholder="flag{...}"></div>
+      <div class="ftrow2">
+        <div class="ftrow"><label>EVENT</label>
+          <input id="ftevent" class="field" list="eventlist" spellcheck="false" placeholder="name the CTF"></div>
+        <div class="ftrow"><label>FLAG FMT</label>
+          <input id="ftfmt" class="field" spellcheck="false" placeholder="optional — e.g. POCTF{...}"></div>
+      </div>
+      <div class="ftrow2">
+        <div class="ftrow"><label>CATEGORY</label>
+          <select id="ftcat" class="field">
+            <option>misc</option><option>pwn</option><option>rev</option><option>web</option>
+            <option>crypto</option><option>forensics</option><option>stego</option>
+            <option>osint</option><option>network</option></select></div>
+        <div class="ftrow"><label>NOTE (optional)</label>
+          <input id="ftnote" class="field" spellcheck="false" placeholder="how you got it — goes in the writeup"></div>
+      </div>
+      <div class="ftbtns">
+        <button class="ftbtn" id="ftverify">⟐ VERIFY</button>
+        <button class="ftbtn" id="ftsave">★ SAVE TO VAULT</button>
+      </div>
+      <div class="ftverdict" id="ftverifyout"><span class="ic"></span><span class="msg"></span></div>
+    </div>
+
+    <div class="ftcard">
+      <h3>SUBMIT TO SCOREBOARD</h3>
+      <div class="sub">Send the flag to the live platform and see if it scores. Credentials are stored locally (<code>~/.config/krypt/config.json</code>, chmod 600) — never sent anywhere but your scoreboard.</div>
+      <div class="ftrow2">
+        <div class="ftrow"><label>PLATFORM</label>
+          <select id="ftplat" class="field">
+            <option value="ctfd">CTFd</option>
+            <option value="rctf">rCTF</option>
+            <option value="generic">Generic HTTP</option></select></div>
+        <div class="ftrow"><label id="ftcidlabel">CHALLENGE ID</label>
+          <input id="ftcid" class="field" spellcheck="false" placeholder="e.g. 42"></div>
+      </div>
+      <div class="ftrow"><label>SCOREBOARD URL</label>
+        <input id="fturl" class="field" spellcheck="false" placeholder="https://ctf.example.com"></div>
+      <div class="ftrow"><label id="fttoklabel">API TOKEN</label>
+        <input id="fttoken" class="field" type="password" spellcheck="false" placeholder="paste token — leave blank to keep the stored one">
+        <div class="fthint" id="fttokhint"></div></div>
+      <div class="ftrow" id="ftfieldrow" style="display:none"><label>FLAG FIELD NAME</label>
+        <input id="ftfield" class="field" spellcheck="false" value="flag" placeholder="JSON key the endpoint expects (default: flag)"></div>
+      <div class="ftbtns" style="align-items:center">
+        <button class="ftbtn primary" id="ftsubmit">▶ SUBMIT FLAG</button>
+        <label class="ftcheck"><input type="checkbox" id="ftremember" checked> remember these settings</label>
+      </div>
+      <div class="ftverdict" id="ftsubmitout"><span class="ic"></span><span class="msg"></span></div>
+    </div>
+  </div>
+</div>
 <div id="dropoverlay"><div class="box"><div class="ic">⇩</div>
   <div class="t">DROP TO HUNT</div>
   <div class="s">release anywhere — KRYPT will scan the file</div></div></div>
@@ -381,7 +475,7 @@
 const $=s=>document.querySelector(s);
 const out=$("#out"), scan=$("#scan"), go=$("#go"), scanmsg=$("#scanmsg");
 const GO_LABEL=go.textContent;
-let ENGINE="all", CATEGORY="auto";
+let ENGINE="all", CATEGORY="auto", LAST_FLAGS=[];
 
 /* ---- boot intro (glitch + decrypt scramble) ---- */
 (function(){
@@ -459,6 +553,7 @@ function render(res){
   document.body.classList.add("has-results");
   if(res.error){out.innerHTML='<div class="err">✖ '+esc(res.error)+'</div>';out.style.display="block";return;}
   const t=res.target||{}, flags=res.flags||[], steps=res.steps||[];
+  LAST_FLAGS=flags.map(f=>f.flag);
   const kind=esc(t.kind||"?")+(t.subkind?(" / "+esc(t.subkind)):"");
   let h="";
   h+='<div class="stats">'
@@ -694,6 +789,99 @@ addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#vault").classList.contai
 try{const le=localStorage.getItem("krypt_event"); if(le)$("#event").value=le;}catch(e){}
 loadVault();
 
+/* ---- FLAG TOOL: enter · verify · save · submit ---- */
+let FT_CFG_LOADED=false;
+function ftVerdict(el,cls,ic,html){el.className="ftverdict show "+cls;
+  el.querySelector(".ic").textContent=ic;el.querySelector(".msg").innerHTML=html;}
+function ftPlatformUI(){
+  const p=$("#ftplat").value;
+  $("#ftfieldrow").style.display=(p==="generic")?"block":"none";
+  $("#ftcidlabel").textContent=(p==="generic")?"CHALLENGE ID (unused)":"CHALLENGE ID";
+  $("#ftcid").style.opacity=(p==="generic")?".5":"1";
+  const tl={ctfd:"API TOKEN (Authorization: Token …)",rctf:"TEAM TOKEN (Authorization: Bearer …)",
+            generic:"BEARER TOKEN (optional)"};
+  $("#fttoklabel").textContent=tl[p]||"TOKEN";
+}
+async function ftLoadConfig(){
+  try{
+    const c=await (await fetch("/api/flag/config")).json();
+    const sb=c.scoreboard||{};
+    $("#ftplat").value=sb.platform||"ctfd";
+    $("#fturl").value=sb.url||"";
+    $("#ftcid").value=sb.challenge_id||"";
+    $("#ftfield").value=sb.field||"flag";
+    $("#fttokhint").innerHTML=sb.has_token
+      ? "✓ a token is stored — leave blank to reuse it, or type a new one to replace it"
+      : "no token stored yet — paste one to save it";
+  }catch(e){}
+  ftPlatformUI(); FT_CFG_LOADED=true;
+}
+function openFlagTool(){
+  // pull context from the main form + last hunt
+  if(!$("#ftflag").value && LAST_FLAGS.length) $("#ftflag").value=LAST_FLAGS[0];
+  $("#ftevent").value=$("#event").value||$("#ftevent").value;
+  if($("#fmt").value) $("#ftfmt").value=$("#fmt").value;
+  if(CATEGORY && CATEGORY!=="auto"){const o=[...$("#ftcat").options].find(x=>x.value===CATEGORY);if(o)$("#ftcat").value=CATEGORY;}
+  if(!FT_CFG_LOADED) ftLoadConfig();
+  $("#flagtool").classList.add("open");
+  setTimeout(()=>$("#ftflag").focus(),60);
+}
+$("#flagbtn").onclick=openFlagTool;
+$("#flagclose").onclick=()=>$("#flagtool").classList.remove("open");
+$("#ftplat").onchange=ftPlatformUI;
+
+$("#ftverify").onclick=async()=>{
+  const flag=$("#ftflag").value.trim(); const out=$("#ftverifyout");
+  if(!flag){ftVerdict(out,"no","✗","Enter a flag first.");return;}
+  try{
+    const r=await (await fetch("/api/flag/verify",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({flag,format:$("#ftfmt").value})})).json();
+    if(r.valid) ftVerdict(out,"ok","✓","<b>Looks valid</b> — "+esc(r.reason)+" (conf "+r.confidence+")");
+    else ftVerdict(out,"no","✗",esc(r.reason));
+  }catch(e){ftVerdict(out,"warn","!","verify failed: "+esc(e.message));}
+};
+$("#ftsave").onclick=async()=>{
+  const flag=$("#ftflag").value.trim(), ev=$("#ftevent").value.trim(); const out=$("#ftverifyout");
+  if(!flag){ftVerdict(out,"no","✗","Enter a flag first.");return;}
+  if(!ev){ftVerdict(out,"no","✗","Name an event to save under.");return;}
+  try{
+    const r=await (await fetch("/api/flag/save",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({flag,event:ev,category:$("#ftcat").value,note:$("#ftnote").value})})).json();
+    const s=r.saved||{};
+    if(s.solve_id){ftVerdict(out,"ok","★","<b>Saved to Vault</b> — writeup generated under <b>"+esc(ev)+"</b>");refreshVaultCount();}
+    else if(s.duplicate) ftVerdict(out,"warn","●","Already in the Vault for this event.");
+    else ftVerdict(out,"no","✗",esc((r.error||s.error)||"save failed"));
+  }catch(e){ftVerdict(out,"warn","!","save failed: "+esc(e.message));}
+};
+$("#ftsubmit").onclick=async()=>{
+  const flag=$("#ftflag").value.trim(), out=$("#ftsubmitout");
+  if(!flag){ftVerdict(out,"no","✗","Enter a flag first.");return;}
+  if(!$("#fturl").value.trim()){ftVerdict(out,"no","✗","Enter the scoreboard URL.");return;}
+  const btn=$("#ftsubmit"); btn.disabled=true; const old=btn.textContent; btn.textContent="▶ SUBMITTING…";
+  ftVerdict(out,"warn","⋯","Submitting to "+esc($("#ftplat").value.toUpperCase())+"…");
+  try{
+    const r=await (await fetch("/api/flag/submit",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({flag,platform:$("#ftplat").value,url:$("#fturl").value.trim(),
+        token:$("#fttoken").value,challenge_id:$("#ftcid").value.trim(),field:$("#ftfield").value.trim(),
+        remember:$("#ftremember").checked,event:$("#ftevent").value.trim(),
+        category:$("#ftcat").value,note:$("#ftnote").value})})).json();
+    const m=esc(r.message||""), st=r.status;
+    if(st==="correct"){ftVerdict(out,"ok","✓","<b>CORRECT</b> — flag accepted"+(m?" · "+m:"")+(r.saved&&r.saved.solve_id?" · saved to Vault":""));refreshVaultCount();}
+    else if(st==="already_solved"){ftVerdict(out,"warn","●","<b>ALREADY SOLVED</b>"+(m?" · "+m:""));refreshVaultCount();}
+    else if(st==="incorrect"){ftVerdict(out,"no","✗","<b>INCORRECT</b>"+(m?" · "+m:""));}
+    else if(st==="ratelimited"){ftVerdict(out,"warn","◴","<b>RATE-LIMITED</b> — wait before retrying"+(m?" · "+m:""));}
+    else if(st==="auth_error"){ftVerdict(out,"warn","⚿","<b>AUTH FAILED</b> — "+m);}
+    else ftVerdict(out,"warn","!","<b>ERROR</b> — "+m);
+    if(st!=="auth_error") $("#fttoken").value="";  // don't leave the token sitting in the box
+    if($("#ftremember").checked) ftLoadConfig();
+  }catch(e){ftVerdict(out,"warn","!","submit failed: "+esc(e.message));}
+  finally{btn.disabled=false; btn.textContent=old;}
+};
+addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#flagtool").classList.contains("open"))$("#flagtool").classList.remove("open");});
+
 /* deep-link: /?t=<target>&d=<desc>&e=<engine>&c=<category>&ev=<event> */
 (function(){const p=new URLSearchParams(location.search),tv=p.get("t");
   if(p.get("d"))$("#desc").value=p.get("d");
@@ -701,6 +889,7 @@ loadVault();
   if(p.get("c")){const b=document.querySelector('.cat[data-cat="'+p.get("c")+'"]');if(b)b.click();}
   if(p.get("e")){const b=document.querySelector('.eng[data-eng="'+p.get("e")+'"]');if(b&&!b.disabled)b.click();}
   if(p.get("vault")==="1"){setTimeout(()=>$("#vaultbtn").click(),300);}
+  if(p.get("flag")==="1"){setTimeout(openFlagTool,300);}
   if(tv){$("#target").value=tv;solveTarget();}})();
 </script>
 </body>
