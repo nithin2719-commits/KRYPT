@@ -172,7 +172,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --watch, seconds between polls (default 0.8)")
     ap.add_argument("--no-recursive", action="store_true",
                     help="with --watch, do not descend into subdirectories")
+    ap.add_argument("--doctor", action="store_true",
+                    help="check the CTF environment (tools, wordlist, engines) "
+                         "and print a readiness report")
     args = ap.parse_args(argv)
+
+    if args.doctor:
+        from . import doctor
+        return doctor.run()
 
     if args.watch:
         from . import watch

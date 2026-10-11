@@ -1,6 +1,12 @@
 # Changelog
 
 ## v1.2
+- **Frontier engine → Opus 5.5**: the CLAUDE·API engine now defaults to
+  `claude-opus-5-5` (strongest for hard CTF; overridable via `$KRYPT_API_MODEL`),
+  with current-family pricing for accurate local spend estimates.
+- **`--doctor`**: `./ctf --doctor` reports CTF-environment readiness — per-category
+  CLI tools, rockyou, the local model, the frontier API key, and the MCP engines
+  (hexstrike-ai, ghidra, claude, agy) — with a PERFECT/STRONG/OK verdict.
 - **Parallel engine racing** (ALL·AUTO): free engines still gate the paid ones
   (deterministic triage then the offline local model short-circuit on a flag),
   but the paid AI engines — CLAUDE·MCP, CLAUDE·API, and agy under
