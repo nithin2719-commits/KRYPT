@@ -1,6 +1,12 @@
 # Changelog
 
 ## v1.2
+- **Parallel engine racing** (ALL·AUTO): free engines still gate the paid ones
+  (deterministic triage then the offline local model short-circuit on a flag),
+  but the paid AI engines — CLAUDE·MCP, CLAUDE·API, and agy under
+  `KRYPT_AGY_YOLO` — now **race concurrently** instead of one-at-a-time; the
+  first real flag wins and the losers are abandoned. Response carries an
+  `escalation: {tried, raced, solved_by}` block.
 - **WATCH / auto-hunt**: point KRYPT at folders (`./ctf --watch ~/Downloads`)
   and it hunts flags in every new/changed file the instant it lands — content
   de-dup, write-settle guard, live log, optional `--deep` full pipeline and

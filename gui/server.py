@@ -273,108 +273,142 @@ def solve(target: str, description: str = "", use_ai: bool = False,
         _SOLVE_LOCK.release()
 
 
-def deep(target: str, description: str, provider: str,
-         category: str = "auto", event: str = "", flag_format: str = "") -> dict:
-    """Fast triage, then escalate to an AI engine to try to capture the flag.
+def _scan_agent_output(ag: dict) -> list[dict]:
+    """Flags in an agent's answer: named formats + an explicit FLAG: line."""
+    if not ag.get("output"):
+        return []
+    afl = [f for f in scan_text(ag["output"]) if not _is_placeholder(f["flag"])]
+    for line in ag["output"].splitlines():
+        ln = line.strip()
+        if ln.upper().startswith("FLAG:"):
+            val = ln[5:].strip()
+            if val and not _is_placeholder(val) and val not in [x["flag"] for x in afl]:
+                afl.insert(0, {"flag": val, "kind": "agent", "confidence": 90})
+    return afl
 
-    provider 'api'  -> Anthropic API with vision (sees the challenge image).
-    provider 'claude'/'agy' -> the local CLI agent (bounded, no skip-permissions).
-    """
-    res = solve(target, description, use_ai=False, category=category,
-                event=event, engine=provider, flag_format=flag_format)
-    subject = target or f"(no file) {description[:120]}"
-    if provider == "api":
-        from ctfsolver import ai_api
-        r = ai_api.solve(target, (description or "").strip(),
-                         res.get("markdown", ""), flag_format, category)
-        note = ("" if r.get("output") else r.get("error", ""))
-        ag = {"ok": r.get("ok", False), "provider": "api",
-              "output": r.get("output", "") or note, "error": r.get("error", "")}
-        u = r.get("usage") or {}
-        res["usage"] = {"account": r.get("account"), "model": r.get("model"),
-                        "input_tokens": u.get("input_tokens", 0),
-                        "output_tokens": u.get("output_tokens", 0),
-                        "cost_usd": r.get("cost_usd", 0)}
-    elif provider == "agy":
-        # agy has no read-only allowlist; running it unattended would need blanket
-        # --dangerously-skip-permissions, which auto-approves its full offensive
-        # arsenal (execute_command / metasploit / hydra / pacu / delete_file). We
-        # OFF by default: we hand off the ready-to-run command for the operator to
-        # launch in their own terminal. The operator can opt in to auto-running it
-        # from the tool by exporting KRYPT_AGY_YOLO=1 (their deliberate choice).
-        if _truthy(os.environ.get("KRYPT_AGY_YOLO")):
-            ag = agents.run("agy", subject, (description or "").strip(),
-                            res.get("markdown", ""), res["workdir"], category,
-                            allow_skip=True)
-        else:
-            ag = {"ok": False, "provider": "agy", "output": "",
-                  "error": "agy is hand-off by default: copy the command below and "
-                           "run it in your own terminal (it auto-approves every "
-                           "tool). To let KRYPT run it automatically, export "
-                           "KRYPT_AGY_YOLO=1. For safe in-tool solving use CLAUDE·MCP."}
-    else:
-        ag = agents.run(provider, subject, (description or "").strip(),
-                        res.get("markdown", ""), res["workdir"], category)
-    res["agent"] = ag
-    if ag.get("output"):
-        # scan the agent's answer for flags (named formats + FLAG: lines)
-        afl = [f for f in scan_text(ag["output"]) if not _is_placeholder(f["flag"])]
-        for line in ag["output"].splitlines():
-            ln = line.strip()
-            if ln.upper().startswith("FLAG:"):
-                val = ln[5:].strip()
-                if val and not _is_placeholder(val) and val not in [x["flag"] for x in afl]:
-                    afl.insert(0, {"flag": val, "kind": "agent", "confidence": 90})
-        res["steps"].append({
-            "step": f"deep-agent({provider})",
-            "summary": ("captured " + str(len(afl)) + " flag(s)" if afl
-                        else "agent ran; no flag in output"),
-            "output": ag["output"][:8000], "flags": afl})
-        if afl:
-            res["flags"] = _aggregate(res["steps"])
-            if event and event.strip():
-                try:
-                    res["saved"] = vault.add_solve(event.strip(), res,
-                                                   res["flags"][0]["flag"], provider)
-                except Exception:
-                    pass
-    else:
-        res["steps"].append({"step": f"deep-agent({provider})",
-                             "summary": "agent did not return output",
-                             "output": ag.get("error", ""), "flags": []})
-    # keep the runnable command for transparency / manual re-run (CLI engines only)
-    if provider != "api":
-        res["handoff"] = agents.command_for(provider, subject,
-                                            (description or "").strip(),
-                                            res["workdir"], category)
-    return res
+
+_AGY_HANDOFF_MSG = ("agy is hand-off by default: copy the command below and run "
+                    "it in your own terminal (it auto-approves every tool). To let "
+                    "KRYPT run it automatically, export KRYPT_AGY_YOLO=1. For safe "
+                    "in-tool solving use CLAUDE·MCP.")
 
 
 def _truthy(v) -> bool:
     return str(v or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _run_provider(provider: str, target: str, description: str, base_md: str,
+                  workdir: str, category: str, flag_format: str) -> dict:
+    """Run ONE AI provider against ALREADY-COMPUTED triage context and return an
+    isolated result that touches no shared state — so several can run at once
+    (this is what the parallel race in escalate() calls):
+        {provider, ag, flags, step, usage?, handoff?}
+    """
+    subject = target or f"(no file) {description[:120]}"
+    desc = (description or "").strip()
+    out: dict = {"provider": provider}
+    if provider == "api":
+        from ctfsolver import ai_api
+        r = ai_api.solve(target, desc, base_md, flag_format, category)
+        note = ("" if r.get("output") else r.get("error", ""))
+        ag = {"ok": r.get("ok", False), "provider": "api",
+              "output": r.get("output", "") or note, "error": r.get("error", "")}
+        u = r.get("usage") or {}
+        out["usage"] = {"account": r.get("account"), "model": r.get("model"),
+                        "input_tokens": u.get("input_tokens", 0),
+                        "output_tokens": u.get("output_tokens", 0),
+                        "cost_usd": r.get("cost_usd", 0)}
+    elif provider == "agy":
+        # agy has no read-only allowlist; auto-running it needs blanket
+        # --dangerously-skip-permissions (which auto-approves its full offensive
+        # arsenal: execute_command / metasploit / hydra / pacu / delete_file).
+        # OFF by default — hand off the command; opt in with KRYPT_AGY_YOLO=1.
+        if _truthy(os.environ.get("KRYPT_AGY_YOLO")):
+            ag = agents.run("agy", subject, desc, base_md, workdir, category,
+                            allow_skip=True)
+        else:
+            ag = {"ok": False, "provider": "agy", "output": "", "error": _AGY_HANDOFF_MSG}
+    else:
+        ag = agents.run(provider, subject, desc, base_md, workdir, category)
+    afl = _scan_agent_output(ag)
+    out["ag"] = ag
+    out["flags"] = afl
+    out["step"] = {
+        "step": f"deep-agent({provider})",
+        "summary": (f"captured {len(afl)} flag(s)" if afl
+                    else ("agent ran; no flag in output" if ag.get("output")
+                          else "agent did not return output")),
+        "output": (ag.get("output") or ag.get("error", ""))[:8000],
+        "flags": afl}
+    if provider != "api":
+        out["handoff"] = agents.command_for(provider, subject, desc, workdir, category)
+    return out
+
+
+def _merge_provider(res: dict, r: dict, event: str) -> dict:
+    """Fold a provider result into res: append its step, set agent/usage/handoff,
+    aggregate flags, and auto-save the top flag to the event when one was found."""
+    res["agent"] = r["ag"]
+    if "usage" in r:
+        res["usage"] = r["usage"]
+    if "handoff" in r:
+        res["handoff"] = r["handoff"]
+    res["steps"].append(r["step"])
+    if r["flags"]:
+        res["flags"] = _aggregate(res["steps"])
+        if event and event.strip():
+            try:
+                res["saved"] = vault.add_solve(event.strip(), res,
+                                               res["flags"][0]["flag"], r["provider"])
+            except Exception:
+                pass
+    return res
+
+
+def deep(target: str, description: str, provider: str,
+         category: str = "auto", event: str = "", flag_format: str = "") -> dict:
+    """Fast triage, then escalate to a single AI engine to try to capture the flag.
+
+    provider 'api'  -> Anthropic API with vision (sees the challenge image).
+    provider 'claude'/'agy' -> the local CLI agent (bounded, no skip-permissions).
+    """
+    res = solve(target, description, use_ai=False, category=category,
+                event=event, engine=provider, flag_format=flag_format)
+    r = _run_provider(provider, target, description, res.get("markdown", ""),
+                      res["workdir"], category, flag_format)
+    return _merge_provider(res, r, event)
+
+
+def _race_label(p: str) -> str:
+    return {"claude": "claude-mcp", "api": "claude-api"}.get(p, p)
+
+
 def escalate(target: str, description: str, category: str = "auto",
              event: str = "", flag_format: str = "") -> dict:
-    """'Every AI' mode: run each available engine in order, stopping at the first
-    real flag. triage(+LOCAL) -> CLAUDE·MCP -> CLAUDE·API -> agy. agy is the
-    hand-off command unless KRYPT_AGY_YOLO is set. Cheap stages gate the costly
-    ones: an easy challenge is solved by triage for free and never calls an API."""
+    """'Every AI' mode with PARALLEL RACING. Free engines gate the paid ones:
+    deterministic triage (instant) then the local GPU model (offline) run first
+    and short-circuit on a flag — an easy challenge is solved for free and never
+    calls an API. If both miss, the paid AI engines (CLAUDE·MCP, CLAUDE·API, and
+    agy only under KRYPT_AGY_YOLO) are RACED in parallel and the first real flag
+    wins; the engines that lose are left to finish in the background and ignored.
+    agy is the hand-off command unless KRYPT_AGY_YOLO is set."""
+    import concurrent.futures
     from ctfsolver import ai_api
-    tried = []
+    tried: list = []
+    raced: list = []
 
     def done(res, by):
-        res["escalation"] = {"tried": tried, "solved_by": by}
+        res["escalation"] = {"tried": tried, "raced": raced, "solved_by": by}
         return res
 
-    # 1. deterministic triage — fast and free; solves the easy wins with no AI cost
+    # 1. deterministic triage — fast and free
     res = solve(target, description, use_ai=False, category=category,
                 event=event, engine="triage", flag_format=flag_format)
     tried.append("triage")
     if res.get("flags"):
         return done(res, "triage")
 
-    # 2. LOCAL GPU model (offline) — only if triage missed
+    # 2. LOCAL GPU model (offline, free) — only if triage missed
     if ai.available():
         res = solve(target, description, use_ai=True, category=category,
                     event=event, engine="local", flag_format=flag_format)
@@ -382,23 +416,56 @@ def escalate(target: str, description: str, category: str = "auto",
         if res.get("flags"):
             return done(res, "local")
 
-    # 3. CLAUDE · MCP (scoped read-only ghidra/hexstrike)
-    if agents.available().get("claude"):
-        res = deep(target, description, "claude", category, event, flag_format)
-        tried.append("claude-mcp")
-        if res.get("flags"):
-            return done(res, "claude-mcp")
-
-    # 3. CLAUDE · API (vision — sees images)
+    # 3. PAID engines — RACE in parallel, first real flag wins
+    base_md = res.get("markdown", "")
+    workdir = res["workdir"]
+    avail = agents.available()
+    race = []
+    if avail.get("claude"):
+        race.append("claude")
     if ai_api.available():
-        res = deep(target, description, "api", category, event, flag_format)
-        tried.append("claude-api")
-        if res.get("flags"):
-            return done(res, "claude-api")
+        race.append("api")
+    if _truthy(os.environ.get("KRYPT_AGY_YOLO")) and avail.get("agy"):
+        race.append("agy")
 
-    # 4. agy last — auto-runs only under KRYPT_AGY_YOLO, else handed off
-    res = deep(target, description, "agy", category, event, flag_format)
-    tried.append("agy")
+    def runner(p):
+        try:
+            return _run_provider(p, target, description, base_md, workdir,
+                                 category, flag_format)
+        except Exception as e:
+            return {"provider": p,
+                    "ag": {"ok": False, "provider": p, "output": "",
+                           "error": f"{type(e).__name__}: {e}"},
+                    "flags": [],
+                    "step": {"step": f"deep-agent({p})", "summary": "engine error",
+                             "output": str(e), "flags": []}}
+
+    winner, losers = None, []
+    if race:
+        tried += [_race_label(p) for p in race]
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=len(race))
+        futs = {ex.submit(runner, p): p for p in race}
+        try:
+            for fut in concurrent.futures.as_completed(futs):
+                r = fut.result()
+                raced.append(r["provider"])
+                if r["flags"] and winner is None:
+                    winner = r
+                    break
+                losers.append(r)
+        finally:
+            ex.shutdown(wait=False)   # don't block on the engines that lost
+        if winner:
+            return done(_merge_provider(res, winner, event),
+                        _race_label(winner["provider"]))
+        for r in losers:            # nobody won: keep each engine's output visible
+            _merge_provider(res, r, event)
+
+    # 4. agy hand-off command (when it wasn't raced) so the operator can run it
+    if "agy" not in race:
+        _merge_provider(res, _run_provider("agy", target, description, base_md,
+                                           workdir, category, flag_format), event)
+        tried.append("agy")
     return done(res, "agy" if res.get("flags") else None)
 
 
