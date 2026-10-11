@@ -85,8 +85,9 @@ flowchart LR
 
 1. **Detect.** `file`/MIME plus URL and host heuristics pick a category.
 2. **Generic triage** (every file): `file`, `strings` (ASCII and UTF-16), `exiftool`, `binwalk`
-   with entropy, embedded-file extraction, and a flag-regex sweep over the raw bytes *and*
-   over every tool's output.
+   with entropy, embedded-file extraction, a flag-regex sweep over the raw bytes *and* over
+   every tool's output, plus a **base64/hex decode sweep** that catches a flag encoded inside
+   the file (`ZmxhZ3s…}` → `flag{…}`).
 3. **Category triage:**
 
    | Category | What runs |
@@ -148,7 +149,23 @@ bind = ALT, T, exec, ~/ctf-solver/gui/launch.sh
 ./ctf 10.10.10.5:1337            # remote service
 ./ctf ./chal --ai                # + local Ollama hypothesis
 ./ctf ./chal --json              # machine-readable report
+./ctf --watch ~/Downloads        # WATCH: auto-hunt files the moment they land
+./ctf --doctor                   # check the CTF environment is ready
 ```
+
+**WATCH — auto-hunt on drop.** Point KRYPT at folders and it hunts flags in every new or
+changed file the instant it appears (plaintext + base64/hex), no click or re-run — aim it at
+your browser's download folder during a live CTF. `--deep` runs the full pipeline per file;
+`--event` auto-saves captures to the Vault. The GUI has a matching **WATCH** row with a live
+capture panel.
+
+```bash
+./ctf --watch ~/Downloads ./drop --deep --event "picoCTF 2026"
+```
+
+**`--doctor`.** Prints a readiness report — per-category CLI tools, rockyou, the local model,
+the frontier API key, and the MCP engines (hexstrike-ai, ghidra, claude, agy) — with a
+`PERFECT / STRONG / OK` verdict and exactly what to install or enable.
 
 Pin the event's flag format for precise sweeps:
 
@@ -173,11 +190,11 @@ Paste the challenge prompt and hints into the briefing box, and the flag wrapper
 
 | Engine | What it does |
 |---|---|
-| **ALL · AUTO** *(default)* | Runs every available engine in order, triage → local → Claude MCP → Claude API → agy, and stops at the first real flag. Easy challenges are solved for free and never touch an API. |
+| **ALL · AUTO** *(default)* | Free engines gate the paid ones, then the paid ones **race in parallel**. Deterministic triage (instant) and the local GPU model (offline) run first and short-circuit on a flag — easy challenges are solved for free and never touch an API. If both miss, Claude MCP, Claude API and (under `KRYPT_AGY_YOLO`) agy are launched **concurrently** and the first real flag wins. |
 | **TRIAGE** | Deterministic pipeline only. Instant, offline, never refuses. |
 | **LOCAL · &lt;model&gt;** | Adds a local Ollama hypothesis on your GPU (`ai.py`). Picks an installed security model automatically, falls back to `qwen2.5-coder:7b`; override with `CTF_OLLAMA_MODEL`. |
 | **CLAUDE · MCP** | Runs `claude -p` against the challenge with a scoped, read-only MCP allowlist (ghidra, hexstrike-ai). No skip-permissions. |
-| **CLAUDE · API** | Calls the Anthropic Messages API directly and **sees the challenge image**, for clues drawn in pixels, QR codes or handwriting. Bring your own key via `ANTHROPIC_API_KEY` or `~/.config/krypt/config.json`; multiple keys rotate by remaining credit. |
+| **CLAUDE · API** | Calls the Anthropic Messages API directly on **Opus 5.5** (override with `$KRYPT_API_MODEL`) and **sees the challenge image**, for clues drawn in pixels, QR codes or handwriting — the hard-challenge brain of the race. Bring your own key via `ANTHROPIC_API_KEY` or `~/.config/krypt/config.json`; multiple keys rotate by remaining credit. |
 | **AGY · MCP** | Hands you a ready-to-run `agy -p` command. It only runs unattended if you opt in with `KRYPT_AGY_YOLO=1`. |
 
 ## Vault & writeups
@@ -193,10 +210,12 @@ under `vault/`.
 ```
 ctf                    CLI launcher
 ctfsolver/
-  __main__.py          CLI, orchestration, recursive hunt
+  __main__.py          CLI, orchestration, recursive hunt, --watch, --doctor
   detect.py            input classification
   categories.py        domain → tool/skill arsenals
-  flags.py             flag-regex sweep (strict mode for noisy sources)
+  flags.py             flag sweep — plaintext + base64/hex decode (strict mode)
+  watch.py             real-time folder watcher / auto-hunt engine
+  doctor.py            CTF-environment readiness report
   decoders.py          magic BFS decoder + XOR brute force
   crack.py             rockyou auto-crack (zip / steghide / hash)
   solvers/             angr, pwn scaffold, RSA, brainfuck, text-stego, USB HID
