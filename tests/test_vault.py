@@ -57,6 +57,26 @@ def test_md_to_html_renders_code_and_headings():
     assert "<li>item</li>" in html
 
 
+def test_md_to_html_is_krypt_branded():
+    html = export.md_to_html("# Chal\n\nbody", "picoCTF 2026")
+    # KRYPT masthead + brand fonts + full-bleed dark theme + footer
+    assert "class='brand'" in html and "KRYPT" in html
+    assert "Orbitron" in html and "JetBrains Mono" in html
+    assert "class='page'" in html          # full-bleed wrapper
+    assert "PICOCTF 2026" in html          # title stamp
+    assert "github.com/nithin2719-commits/KRYPT" in html
+
+
+def test_md_to_html_flag_hero_and_ordered_list():
+    md = "# C\n\n**Flag** · `flag{hero}`\n\n1. first step\n2. second step"
+    html = export.md_to_html(md, "t")
+    assert "flaghero" in html and "flag{hero}" in html
+    assert "Flag Captured" in html
+    # the literal "**Flag** ·" line must become the hero, not a plain paragraph
+    assert "<p>**Flag**" not in html
+    assert "<ol>" in html and "<li>first step</li>" in html
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
