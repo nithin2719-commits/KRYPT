@@ -31,6 +31,25 @@ def test_writeup_marks_winning_step():
     assert "`strings`" in md
 
 
+def test_writeup_cooked_format():
+    md = make_writeup(_RES, "flag{x}", "picoCTF 2026", engine="claude-api")
+    # flag is stated up top, before the first section heading
+    assert md.index("**Flag** · `flag{x}`") < md.index("## Overview")
+    # new sections + metadata the cooked format adds
+    for token in ("## Overview", "## Solve path", "## Reproduce",
+                  "**Flag format:** `flag{...}`", "engine `claude-api`", "🚩"):
+        assert token in md, token
+
+
+def test_writeup_encoding_note():
+    res = {"target": {"kind": "file", "subkind": "text", "raw": "/tmp/c.txt"},
+           "steps": [{"step": "flag-sweep(encoded)", "summary": "1 after decode",
+                      "flags": [{"flag": "flag{e}", "confidence": 90,
+                                 "kind": "base64", "encoded": True}]}]}
+    md = make_writeup(res, "flag{e}", "E")
+    assert "base64" in md and "decoded it automatically" in md
+
+
 def test_md_to_html_renders_code_and_headings():
     html = export.md_to_html("# Title\n\n```\ncode\n```\n- item", "t")
     assert "<h1>Title</h1>" in html

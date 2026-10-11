@@ -42,6 +42,53 @@ MAX_UPLOAD = 512 * 1024 * 1024
 # format-sensitive section to stop overlapping solves clobbering each other.
 _SOLVE_LOCK = threading.Lock()
 
+# ---- live WATCH / auto-hunt (one watcher per server) ----------------------
+_WATCH_LOCK = threading.Lock()
+_WATCHER = None  # type: ignore
+
+
+def watch_start(dirs, deep=False, event="", interval=0.8) -> dict:
+    """Start (or replace) the background folder watcher that auto-hunts flags in
+    new/changed files. Only existing local directories are accepted."""
+    from ctfsolver.watch import FlagWatcher
+    global _WATCHER
+    real, bad = [], []
+    for d in dirs or []:
+        p = os.path.abspath(os.path.expanduser((d or "").strip()))
+        (real if p and os.path.isdir(p) else bad).append(p or d)
+    if not real:
+        return {"ok": False, "error": "no existing directory to watch",
+                "rejected": bad}
+    logdir = os.path.join(WORKSPACE, "watch")
+    with _WATCH_LOCK:
+        if _WATCHER:
+            _WATCHER.stop()
+        _WATCHER = FlagWatcher(real, deep=bool(deep), event=event or "",
+                               interval=float(interval or 0.8), logdir=logdir)
+        _WATCHER.start_thread()
+        st = _WATCHER.status()
+    st.update({"ok": True, "rejected": bad, "logpath": _WATCHER.logpath})
+    return st
+
+
+def watch_stop() -> dict:
+    global _WATCHER
+    with _WATCH_LOCK:
+        if _WATCHER:
+            _WATCHER.stop()
+            st = _WATCHER.status()
+            _WATCHER = None
+            st["running"] = False
+            return {"ok": True, **st}
+    return {"ok": True, "running": False, "finds": [], "scanned": 0}
+
+
+def watch_status() -> dict:
+    with _WATCH_LOCK:
+        if _WATCHER:
+            return {"ok": True, **_WATCHER.status()}
+    return {"ok": True, "running": False, "finds": [], "scanned": 0, "dirs": []}
+
 
 # Phrases that mean the briefing is declaring the flag FORMAT (vs. just
 # containing a wrapped-looking token that is really ciphertext to decode).
@@ -399,6 +446,8 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/usage":
             from ctfsolver import ai_api
             self._send(200, ai_api.status())
+        elif path == "/api/watch/status":
+            self._send(200, watch_status())
         elif path == "/api/events":
             self._send(200, vault.list_events())
         elif path == "/api/writeup":
@@ -505,6 +554,14 @@ class Handler(BaseHTTPRequestHandler):
                 if provider == "all":
                     return self._send(200, escalate(target, desc, cat, ev, fmt))
                 return self._send(200, deep(target, desc, provider, cat, ev, fmt))
+            if path == "/api/watch/start":
+                data = json.loads(self._read_body() or b"{}")
+                dirs = data.get("dirs") or ([data["dir"]] if data.get("dir") else [])
+                return self._send(200, watch_start(dirs, data.get("deep", False),
+                                                   data.get("event", ""),
+                                                   data.get("interval", 0.8)))
+            if path == "/api/watch/stop":
+                return self._send(200, watch_stop())
             if path == "/api/event/delete":
                 data = json.loads(self._read_body() or b"{}")
                 ok = vault.delete_event(data.get("event_id", ""))

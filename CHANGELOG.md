@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.2
+- **WATCH / auto-hunt**: point KRYPT at folders (`./ctf --watch ~/Downloads`)
+  and it hunts flags in every new/changed file the instant it lands — content
+  de-dup, write-settle guard, live log, optional `--deep` full pipeline and
+  `--event` auto-save. New WATCH row in the GUI with a live capture panel.
+- **Encoded-flag sweep**: one-level base64/hex decode sweep catches a flag
+  encoded inside a file (`ZmxhZ3s…}` → `flag{…}`); wired into every file's
+  triage, not just watch mode, with a near-zero false-positive guard.
+- **Writeups, cooked**: flag stated up top, Overview block (inferred flag
+  format + engine), numbered Solve-path timeline with the winning step flagged,
+  an encoding-chain note, and a Reproduce block; event writeups get a
+  by-category summary + Contents list.
+
 ## v1.1
 - **Vault**: per-event session logbook; captured flags auto-save to the named
   event with a professional, deterministic writeup (no AI tokens).

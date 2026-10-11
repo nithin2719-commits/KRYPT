@@ -154,12 +154,34 @@ def to_markdown(res: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ctf-solver")
-    ap.add_argument("target", help="file path, http(s) URL, or host:port")
+    ap.add_argument("target", nargs="?",
+                    help="file path, http(s) URL, or host:port")
     ap.add_argument("--ai", action="store_true",
                     help="also ask the local Ollama model for a hypothesis")
     ap.add_argument("--json", action="store_true",
                     help="print JSON instead of markdown")
+    ap.add_argument("--watch", nargs="+", metavar="DIR",
+                    help="WATCH mode: auto-hunt flags in new/changed files in "
+                         "these directories (the moment a challenge lands)")
+    ap.add_argument("--deep", action="store_true",
+                    help="with --watch, run the full triage pipeline on each "
+                         "file (default: instant plaintext+base64/hex sweep)")
+    ap.add_argument("--event", default="",
+                    help="with --watch, auto-save captured flags to this Vault event")
+    ap.add_argument("--interval", type=float, default=0.8,
+                    help="with --watch, seconds between polls (default 0.8)")
+    ap.add_argument("--no-recursive", action="store_true",
+                    help="with --watch, do not descend into subdirectories")
     args = ap.parse_args(argv)
+
+    if args.watch:
+        from . import watch
+        return watch.watch_cli(args.watch, deep=args.deep, event=args.event,
+                               interval=args.interval,
+                               recursive=not args.no_recursive)
+
+    if not args.target:
+        ap.error("a target is required (or use --watch DIR ... for watch mode)")
 
     res = run_pipeline(args.target)
 

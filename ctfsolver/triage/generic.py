@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import os
 
-from ..flags import scan_file, scan_text
+from ..flags import scan_encoded, scan_file, scan_text
 from ..runner import run
 
 
@@ -38,6 +38,20 @@ def triage(path: str, workdir: str) -> list[dict]:
                   "summary": f"{len(flags)} candidate(s) in raw bytes",
                   "output": "\n".join(f["flag"] for f in flags[:20]),
                   "flags": flags})
+
+    # 2b. one-level base64/hex decode sweep — catches a flag that is encoded
+    # inside the file (the classic "flag is base64'd in the attachment" trick).
+    try:
+        with open(path, "rb") as fh:
+            enc_flags = scan_encoded(fh.read(16 * 1024 * 1024))
+    except OSError:
+        enc_flags = []
+    if enc_flags:
+        steps.append({"step": "flag-sweep(encoded)",
+                      "summary": f"{len(enc_flags)} flag(s) after base64/hex decode",
+                      "output": "\n".join(f"{f['flag']}  [{f['kind']}]"
+                                          for f in enc_flags[:20]),
+                      "flags": enc_flags})
 
     # 3. printable strings (ascii + 16-bit LE), swept for flags too
     s = run(["strings", "-n", "6", path], timeout=90)

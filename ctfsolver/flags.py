@@ -131,9 +131,89 @@ def scan_bytes(data: bytes) -> list[dict]:
     return scan_text(data.decode("latin-1", "replace"))
 
 
+# runs that are worth trying to decode: long enough to carry a wrapped flag,
+# short enough to stay cheap. base64 (std + urlsafe) and hex.
+_B64_RUN = re.compile(rb"[A-Za-z0-9+/_-]{16,512}={0,2}")
+_HEX_RUN = re.compile(rb"(?:[0-9a-fA-F]{2}){8,256}")
+
+
+def scan_encoded(data: bytes, max_bytes: int = 16 * 1024 * 1024,
+                 max_runs: int = 4000) -> list[dict]:
+    """Instant one-level decode sweep: find base64/hex runs, decode them, and
+    report any flag that only appears *after* decoding.
+
+    This catches the classic "the flag is base64'd (or hex'd) inside the file"
+    trick that a plaintext regex sweep misses — the same idea FlagHunter-style
+    watchers use. It is deliberately single-level and bounded; deep/chained
+    encodings are still handled by the crypto BFS decoder in the full pipeline.
+    Only decoded hits that match a real flag wrapper are returned, so the
+    false-positive rate stays near zero.
+    """
+    import base64
+    import binascii
+
+    data = data[:max_bytes]
+    out: dict[str, dict] = {}
+
+    def add_from(decoded: bytes, enc: str):
+        try:
+            text = decoded.decode("latin-1", "replace")
+        except Exception:
+            return
+        for f in scan_text(text, strict=True):
+            val = f["flag"]
+            if val not in out:
+                out[val] = {**f, "kind": enc, "encoded": True}
+
+    runs = 0
+    for m in _B64_RUN.finditer(data):
+        if runs >= max_runs:
+            break
+        runs += 1
+        raw = m.group(0)
+        s = raw.rstrip(b"=")
+        s += b"=" * (-len(s) % 4)
+        for alt in (s, s.replace(b"-", b"+").replace(b"_", b"/")):
+            try:
+                dec = base64.b64decode(alt, validate=False)
+            except (binascii.Error, ValueError):
+                continue
+            if b"{" in dec and b"}" in dec:
+                add_from(dec, "base64")
+    runs = 0
+    for m in _HEX_RUN.finditer(data):
+        if runs >= max_runs:
+            break
+        runs += 1
+        try:
+            dec = binascii.unhexlify(m.group(0))
+        except (binascii.Error, ValueError):
+            continue
+        if b"{" in dec and b"}" in dec:
+            add_from(dec, "hex")
+    return sorted(out.values(), key=lambda d: -d["confidence"])
+
+
 def scan_file(path: str, max_bytes: int = 64 * 1024 * 1024) -> list[dict]:
     try:
         with open(path, "rb") as fh:
             return scan_bytes(fh.read(max_bytes))
     except OSError:
         return []
+
+
+def instant_scan(path: str, max_bytes: int = 64 * 1024 * 1024) -> list[dict]:
+    """Fast, dependency-free flag sweep over a single file: plaintext wrappers
+    PLUS one-level base64/hex-decoded flags, de-duplicated and ranked. This is
+    what the real-time watcher fires the instant a file appears."""
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read(max_bytes)
+    except OSError:
+        return []
+    seen: dict[str, dict] = {}
+    for f in scan_bytes(data) + scan_encoded(data):
+        cur = seen.get(f["flag"])
+        if not cur or f["confidence"] > cur["confidence"]:
+            seen[f["flag"]] = f
+    return sorted(seen.values(), key=lambda d: -d["confidence"])
