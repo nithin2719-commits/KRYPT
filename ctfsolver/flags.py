@@ -38,6 +38,12 @@ _CODE_WORDS = {
     "try", "catch", "interface", "impl", "fn", "match", "case",
 }
 _PLACEHOLDER = re.compile(r"^[.\s…xX*?_\-]+$")
+# Above this many characters, skip the two low-confidence heuristic tiers
+# (semi + fallback): they scan every position of the input (the case-insensitive
+# semi tier cost ~7.5 s on an 8 MB blob), while named + custom wrappers stay
+# cheap because they are literal-anchored. Real flags in big files are named or
+# custom; the guess tiers only matter for small pasted ciphertext/briefings.
+_HEURISTIC_MAX = 1_000_000
 
 
 def _fallback_flag(wrapper: str, content: str) -> bool:
@@ -108,15 +114,20 @@ def scan_text(text: str, strict: bool = False) -> list[dict]:
                 add(m.group(0), "custom", 100)
         except re.error:
             pass
-    for p in _NAMED:
-        for m in re.finditer(p, text):
-            add(m.group(0), "named", 90)
-    if not strict:
-        for m in _SEMI.finditer(text):
-            add(m.group(0), "semi", 55)
-        for m in _FALLBACK.finditer(text):
-            if _fallback_flag(m.group(1), m.group(2)):
-                add(m.group(0), "guess", 50)
+    # Every built-in wrapper (named/semi/fallback) requires a literal '{'. If the
+    # text has none, skip the scans entirely — otherwise the fallback pattern
+    # back-scans every position of a large brace-free blob (an 8 MB binary took
+    # ~9 s here). Custom formats are already handled above and may be brace-less.
+    if "{" in text:
+        for p in _NAMED:
+            for m in re.finditer(p, text):
+                add(m.group(0), "named", 90)
+        if not strict and len(text) <= _HEURISTIC_MAX:
+            for m in _SEMI.finditer(text):
+                add(m.group(0), "semi", 55)
+            for m in _FALLBACK.finditer(text):
+                if _fallback_flag(m.group(1), m.group(2)):
+                    add(m.group(0), "guess", 50)
 
     # drop shorter matches that are substrings of a longer one
     # (e.g. CTF{x} inside picoCTF{x}, flag{x} inside myflag{x})
@@ -194,6 +205,50 @@ def scan_encoded(data: bytes, max_bytes: int = 16 * 1024 * 1024,
     return sorted(out.values(), key=lambda d: -d["confidence"])
 
 
+def _printable_ratio(sample: bytes) -> float:
+    if not sample:
+        return 0.0
+    good = sum(1 for c in sample if 9 <= c <= 13 or 32 <= c <= 126)
+    return good / len(sample)
+
+
+def scan_magic(data: bytes, max_bytes: int = 16 * 1024) -> list[dict]:
+    """Recursive, multi-codec decode sweep for the instant / watch path.
+
+    Runs KRYPT's full "magic" BFS decoder — base64/32/58/85, ascii85, hex,
+    rot13/47, atbash, reverse, morse, binary, decimal, URL-encode, gzip/zlib,
+    single-byte *and* crib-based repeating-key XOR, and all 25 Caesar shifts,
+    **chained** (e.g. base64 → hex → rot13) — and reports a flag only when it
+    appears *after* at least one decode. This is the same engine the full
+    pipeline uses; wiring it into the instant sweep means the "paste it and
+    capture now" moment gets the strong decoder, not just one level of base64.
+
+    Gated to text-ish input and capped at max_bytes (16 KB — CTF ciphertext is
+    small; a recursive BFS over multi-MB blobs would blow up) so it stays
+    instant and never churns over binary: a flag base64'd *inside* a big/binary
+    file is already caught by the byte-level scan_encoded() run. Strict flag
+    matching keeps the false-positive rate at zero.
+    """
+    data = data[:max_bytes]
+    if _printable_ratio(data[:4096]) < 0.85:
+        return []
+    try:
+        from .decoders import magic
+    except Exception:
+        return []
+    try:
+        res = magic(data, max_depth=7, max_nodes=300)
+    except Exception:
+        return []
+    if not res.get("found"):
+        return []
+    chain = "→".join(res.get("path") or []) or "decode"
+    out: dict[str, dict] = {}
+    for f in res["flags"]:
+        out.setdefault(f["flag"], {**f, "kind": chain, "encoded": True})
+    return sorted(out.values(), key=lambda d: -d["confidence"])
+
+
 def scan_file(path: str, max_bytes: int = 64 * 1024 * 1024) -> list[dict]:
     try:
         with open(path, "rb") as fh:
@@ -203,16 +258,18 @@ def scan_file(path: str, max_bytes: int = 64 * 1024 * 1024) -> list[dict]:
 
 
 def instant_scan(path: str, max_bytes: int = 64 * 1024 * 1024) -> list[dict]:
-    """Fast, dependency-free flag sweep over a single file: plaintext wrappers
-    PLUS one-level base64/hex-decoded flags, de-duplicated and ranked. This is
-    what the real-time watcher fires the instant a file appears."""
+    """Fast, dependency-free flag sweep over a single file: plaintext wrappers,
+    a byte-level one-level base64/hex decode, PLUS the recursive multi-codec
+    decoder (chained base64/32/58/85, hex, rot/xor/caesar, gzip…) over text-ish
+    input — de-duplicated and ranked. This is what the real-time watcher fires
+    the instant a file appears, so even layered encodings are caught on drop."""
     try:
         with open(path, "rb") as fh:
             data = fh.read(max_bytes)
     except OSError:
         return []
     seen: dict[str, dict] = {}
-    for f in scan_bytes(data) + scan_encoded(data):
+    for f in scan_bytes(data) + scan_encoded(data) + scan_magic(data):
         cur = seen.get(f["flag"])
         if not cur or f["confidence"] > cur["confidence"]:
             seen[f["flag"]] = f

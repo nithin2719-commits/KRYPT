@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ctfsolver.flags import instant_scan, scan_encoded  # noqa: E402
+from ctfsolver.flags import instant_scan, scan_encoded, scan_magic  # noqa: E402
 from ctfsolver.watch import FlagWatcher  # noqa: E402
 
 
@@ -45,6 +45,49 @@ class TestScanEncoded(unittest.TestCase):
             flags = self._flags(instant_scan(path))
             self.assertIn("picoCTF{plain_one}", flags)
             self.assertIn("flag{encoded_one}", flags)
+        finally:
+            os.unlink(path)
+
+
+class TestScanMagic(unittest.TestCase):
+    def _flags(self, res):
+        return {f["flag"] for f in res}
+
+    def test_chained_base64(self):
+        # base64(base64(flag)) — the single-level sweep can't reach this
+        inner = base64.b64encode(b"flag{double_wrapped}")
+        blob = base64.b64encode(inner).decode()
+        res = scan_magic(blob.encode())
+        self.assertIn("flag{double_wrapped}", self._flags(res))
+        self.assertTrue(res[0]["encoded"])
+
+    def test_rot13_whole_file(self):
+        rot = "".join(
+            chr((ord(c) - 97 + 13) % 26 + 97) if "a" <= c <= "z" else
+            chr((ord(c) - 65 + 13) % 26 + 65) if "A" <= c <= "Z" else c
+            for c in "flag{rot_thirteen}")
+        self.assertIn("flag{rot_thirteen}", self._flags(scan_magic(rot.encode())))
+
+    def test_base32(self):
+        blob = base64.b32encode(b"CTF{base32_me}")
+        self.assertIn("CTF{base32_me}", self._flags(scan_magic(blob)))
+
+    def test_reversed_flag(self):
+        self.assertIn("flag{backwards}",
+                      self._flags(scan_magic(b"flag{backwards}"[::-1])))
+
+    def test_no_false_positive_on_prose(self):
+        self.assertEqual(scan_magic(b"just some ordinary english text here"), [])
+
+    def test_binary_input_skipped_fast(self):
+        self.assertEqual(scan_magic(os.urandom(4096)), [])
+
+    def test_instant_scan_catches_chained(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
+            fh.write(base64.b64encode(base64.b64encode(b"flag{layered}")).decode())
+            path = fh.name
+        try:
+            self.assertIn("flag{layered}", self._flags(instant_scan(path)))
         finally:
             os.unlink(path)
 

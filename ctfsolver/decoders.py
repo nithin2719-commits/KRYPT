@@ -19,6 +19,12 @@ from collections import deque
 from .flags import scan_text
 
 _WS = re.compile(rb"\s+")
+# Nodes larger than this are still flag-checked but never *expanded*: applying
+# the transforms to large blobs — especially the letter rotations (rot13/47,
+# atbash), which keep emitting fresh all-alphabet strings that every base-N
+# decoder then re-expands — makes the BFS blow up to minutes on a ~1 MB input.
+# Real chained encodings hide a flag in small ciphertext, well under this.
+_BRANCH_MAX = 64 * 1024
 
 
 def _printable_ratio(b: bytes) -> float:
@@ -174,7 +180,10 @@ _B58 = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 def d_base58(b):
     s = _WS.sub(b"", b)
-    if not s or len(s) < 4 or any(c not in _B58 for c in s):
+    # base58 decode is big-integer O(n²); a multi-KB run (which is never a real
+    # base58 flag) would stall the BFS for seconds. Cap the length — addresses,
+    # keys and flag ciphertext are all well under this.
+    if not s or len(s) < 4 or len(s) > 2048 or any(c not in _B58 for c in s):
         return None
     try:
         num = 0
@@ -389,7 +398,7 @@ def magic(data: bytes, max_depth: int = 8, max_nodes: int = 500) -> dict:
                     "path": path + [f"xor-key({hit['key'].hex()})"],
                     "sample": hit["text"][:400]}
 
-        if len(path) >= max_depth:
+        if len(path) >= max_depth or len(cur) > _BRANCH_MAX:
             continue
         for name, fn in TRANSFORMS:
             try:

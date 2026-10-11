@@ -53,6 +53,22 @@ def test_base58_roundtrip():
     assert d_base58(b"Cn8eVZg") == b"hello"
 
 
+def test_base58_length_capped():
+    # base58's big-int decode is O(n^2); an over-length run is rejected outright
+    # (never a real flag) so the magic BFS can't be stalled for seconds on it.
+    assert d_base58(b"1" * 4096) is None
+
+
+def test_magic_large_blob_is_bounded():
+    # A multi-MB base58/base64-alphabet blob must not explode the BFS. Guard the
+    # regression: it should return quickly even without a flag present.
+    import time
+    t = time.perf_counter()
+    r = magic(b"A" * (1024 * 1024))
+    assert (time.perf_counter() - t) < 10  # was unbounded (minutes) before caps
+    assert not r["found"]
+
+
 def test_flag_strict_excludes_generic():
     assert scan_text("noise{maybe}", strict=True) == []
     assert scan_text("flag{yes}", strict=True)
@@ -102,6 +118,18 @@ def test_base64url_token():
     r = magic(enc)
     assert r["found"]
     assert any(f["flag"] == "flag{base64url_ok}" for f in r["flags"])
+
+
+def test_named_flag_found_fast_in_large_blob():
+    # A named/custom wrapper must still be found in a multi-MB file, and the two
+    # low-confidence heuristic tiers (semi/fallback) are gated off above the size
+    # cap so the scan stays quick — the full-file sweep used to take ~8 s here.
+    import time
+    text = "x" * 4_000_000 + " picoCTF{found_in_big_file} " + "y" * 4_000_000
+    t = time.perf_counter()
+    hits = {f["flag"] for f in scan_text(text)}
+    assert (time.perf_counter() - t) < 5
+    assert "picoCTF{found_in_big_file}" in hits
 
 
 def test_no_false_flag_on_random_bytes():

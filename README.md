@@ -154,8 +154,11 @@ bind = ALT, T, exec, ~/ctf-solver/gui/launch.sh
 ```
 
 **WATCH — auto-hunt on drop.** Point KRYPT at folders and it hunts flags in every new or
-changed file the instant it appears (plaintext + base64/hex), no click or re-run — aim it at
-your browser's download folder during a live CTF. `--deep` runs the full pipeline per file;
+changed file the instant it appears — plaintext, a byte-level base64/hex decode, **and a
+recursive multi-codec decode chain** (base64/32/58/85, hex, rot13/47, atbash, reverse, morse,
+binary, decimal, URL, gzip/zlib, single-byte & crib XOR, Caesar — chained, e.g.
+`base64 → hex → rot13`) — no click or re-run. Aim it at your browser's download folder during
+a live CTF. `--deep` runs the full pipeline per file;
 `--event` auto-saves captures to the Vault. The GUI has a matching **WATCH** row with a live
 capture panel.
 
@@ -213,7 +216,7 @@ ctfsolver/
   __main__.py          CLI, orchestration, recursive hunt, --watch, --doctor
   detect.py            input classification
   categories.py        domain → tool/skill arsenals
-  flags.py             flag sweep — plaintext + base64/hex decode (strict mode)
+  flags.py             flag sweep — plaintext + base64/hex + recursive magic decode (strict)
   watch.py             real-time folder watcher / auto-hunt engine
   doctor.py            CTF-environment readiness report
   decoders.py          magic BFS decoder + XOR brute force

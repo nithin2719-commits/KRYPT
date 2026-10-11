@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.3
+- **Instant path gets the full decoder**: the "paste it / drop it and capture
+  now" sweep (`instant_scan`, used by WATCH and every file's triage) no longer
+  stops at one level of base64/hex — it now runs KRYPT's recursive **magic**
+  decoder (base64/32/58/85, ascii85, hex, rot13/47, atbash, reverse, morse,
+  binary, decimal, URL, gzip/zlib, single-byte & crib XOR, all 25 Caesar
+  shifts) **chained**, so a `base64 → hex → rot13` flag is caught on drop in
+  ~20 ms. Gated to text-ish input and capped so it stays instant; strict flag
+  matching keeps false positives at zero.
+- **Decoder hardening (perf/robustness)**: three unbounded-work landmines that
+  could stall the tool for minutes on a large or hostile input are now bounded —
+  (1) `magic()` only *expands* nodes under a size cap (large blobs are still
+  flag-checked, never re-expanded), (2) base58's O(n²) big-int decode rejects
+  over-length runs, and (3) the flag scanner skips its two low-confidence
+  heuristic tiers above 1 MB and short-circuits brace-less input. A 1 MB blob
+  that took minutes in the BFS now returns in ~17 ms; an 8 MB file scans in
+  well under a second. Regression tests pin all three.
+
 ## v1.2
 - **Frontier engine → Opus 5.5**: the CLAUDE·API engine now defaults to
   `claude-opus-5-5` (strongest for hard CTF; overridable via `$KRYPT_API_MODEL`),
