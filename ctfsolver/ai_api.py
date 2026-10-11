@@ -9,7 +9,7 @@ KRYPT has no pip dependencies, so this is raw HTTP via urllib — not the anthro
 SDK. Key resolution order:
   1. $ANTHROPIC_API_KEY
   2. ~/.config/krypt/config.json  ->  {"anthropic_api_key": "sk-ant-..."}
-Model: $KRYPT_API_MODEL, else claude-opus-5.
+Model: $KRYPT_API_MODEL, else claude-opus-5-5 (the strongest for hard CTF).
 """
 from __future__ import annotations
 
@@ -24,16 +24,18 @@ API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 CFG_PATH = os.path.expanduser("~/.config/krypt/config.json")
 USAGE_PATH = os.path.expanduser("~/.config/krypt/usage.json")
-DEFAULT_MODEL = os.environ.get("KRYPT_API_MODEL", "claude-opus-5")
+DEFAULT_MODEL = os.environ.get("KRYPT_API_MODEL", "claude-opus-5-5")
 MAX_IMAGE_BYTES = 3_500_000  # ~3.5MB raw -> ~4.7MB base64, under the API's 5MB cap
 
 # $ per 1M tokens (input, output). The Messages API does not return an account
 # credit balance, so KRYPT estimates spend from returned token usage × these
 # rates and tracks it locally against a per-account budget you set.
 PRICES = {
-    "claude-opus-5": (5.0, 25.0), "claude-opus-4-8": (5.0, 25.0),
-    "claude-opus-4-7": (5.0, 25.0), "claude-opus-4-6": (5.0, 25.0),
-    "claude-sonnet-5": (2.0, 10.0), "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-opus-5-5": (5.0, 25.0), "claude-opus-5": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0), "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-4-6": (5.0, 25.0),
+    "claude-sonnet-5-5": (2.0, 10.0), "claude-sonnet-5": (2.0, 10.0),
+    "claude-sonnet-4-6": (3.0, 15.0), "claude-haiku-5-5": (1.0, 5.0),
     "claude-haiku-4-5": (1.0, 5.0),
     "claude-fable-5-1": (10.0, 50.0), "claude-fable-5": (10.0, 50.0),
 }
