@@ -179,6 +179,30 @@ def test_vigenere_crib():
     assert any(f["flag"] == pt for f in r["flags"])
 
 
+def test_bacon_cipher():
+    from ctfsolver.decoders import d_bacon
+    # "FLAG": F=AABAB, L=ABABB, A=AAAAA, G=AABBA
+    enc = b"AABAB ABABB AAAAA AABBA"
+    assert d_bacon(enc) == b"FLAG"
+    # Also test binary representation 0/1
+    enc_bin = b"00101 01011 00000 00110"
+    assert d_bacon(enc_bin) == b"FLAG"
+
+
+def test_base62_roundtrip():
+    from ctfsolver.decoders import d_base62
+    raw = b"flag{base62_roundtrip_ok}"
+    # Decode known base62
+    b62 = b"4Qp97dD0d29Z2EwD1rL8gC46t9w"
+    assert d_base62(b"4Qp97dD0d29Z2EwD1rL8gC46t9w") is not None
+
+
+def test_braille():
+    from ctfsolver.decoders import d_braille
+    raw = "⠋⠇⠁⠛⠇⠁⠛".encode("utf-8")
+    assert d_braille(raw) == b"flaglag"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

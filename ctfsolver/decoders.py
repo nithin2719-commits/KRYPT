@@ -222,14 +222,111 @@ def d_morse(b):
     return res.encode() if res.strip() else None
 
 
+_BACON_24 = {
+    "AAAAA": "A", "AAAAB": "B", "AAABA": "C", "AAABB": "D", "AABAA": "E",
+    "AABAB": "F", "AABBA": "G", "AABBB": "H", "ABAAA": "I", "ABAAB": "K",
+    "ABABA": "L", "ABABB": "M", "ABBAA": "N", "ABBAB": "O", "ABBBA": "P",
+    "ABBBB": "Q", "BAAAA": "R", "BAAAB": "S", "BAABA": "T", "BAABB": "U",
+    "BABAA": "W", "BABAB": "X", "BABBA": "Y", "BABBB": "Z"
+}
+
+_BACON_26 = {
+    "AAAAA": "A", "AAAAB": "B", "AAABA": "C", "AAABB": "D", "AABAA": "E",
+    "AABAB": "F", "AABBA": "G", "AABBB": "H", "ABAAA": "I", "ABAAB": "J",
+    "ABABA": "K", "ABABB": "L", "ABBAA": "M", "ABBAB": "N", "ABBBA": "O",
+    "ABBBB": "P", "BAAAA": "Q", "BAAAB": "R", "BAABA": "S", "BAABB": "T",
+    "BABAA": "U", "BABAB": "V", "BABBA": "W", "BABBB": "X", "BBAAA": "Y",
+    "BBAAB": "Z"
+}
+
+
+def d_bacon(b: bytes) -> bytes | None:
+    try:
+        s = b.decode("ascii")
+    except UnicodeDecodeError:
+        return None
+    raw = re.sub(r"\s+", "", s)
+    if not raw or len(raw) < 5:
+        return None
+    candidates = []
+    if all(c in "01" for c in raw):
+        candidates.append(raw.replace("0", "A").replace("1", "B"))
+        candidates.append(raw.replace("1", "A").replace("0", "B"))
+    elif all(c in "abAB" for c in raw):
+        u = raw.upper()
+        candidates.append(u)
+        candidates.append(u.translate(str.maketrans("AB", "BA")))
+    else:
+        return None
+
+    for cand in candidates:
+        if len(cand) % 5 != 0:
+            continue
+        for mapping in (_BACON_26, _BACON_24):
+            res = []
+            valid = True
+            for i in range(0, len(cand), 5):
+                chunk = cand[i:i + 5]
+                ch = mapping.get(chunk)
+                if not ch:
+                    valid = False
+                    break
+                res.append(ch)
+            if valid and res:
+                return "".join(res).encode()
+    return None
+
+
+_B62 = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+
+def d_base62(b: bytes) -> bytes | None:
+    s = _WS.sub(b"", b)
+    if not s or len(s) < 4 or len(s) > 2048 or any(c not in _B62 for c in s):
+        return None
+    try:
+        num = 0
+        for c in s:
+            num = num * 62 + _B62.index(c)
+        raw = num.to_bytes((num.bit_length() + 7) // 8, "big") if num else b""
+        pad = len(s) - len(s.lstrip(b"0"))
+        return b"\x00" * pad + raw or None
+    except Exception:
+        return None
+
+
+_BRAILLE_MAP = {
+    "\u2801": "a", "\u2803": "b", "\u2809": "c", "\u2819": "d", "\u2811": "e",
+    "\u280b": "f", "\u281b": "g", "\u2813": "h", "\u280a": "i", "\u281a": "j",
+    "\u2805": "k", "\u2807": "l", "\u280d": "m", "\u281d": "n", "\u2815": "o",
+    "\u280f": "p", "\u281f": "q", "\u2817": "r", "\u280e": "s", "\u281e": "t",
+    "\u2825": "u", "\u2827": "v", "\u283a": "w", "\u282d": "x", "\u283d": "y",
+    "\u2835": "z", "\u2800": " ", "\u2824": "-", "\u2804": "'", "\u2802": ",",
+    "\u2806": ";", "\u2812": ":", "\u2832": ".", "\u2826": "?", "\u2816": "!"
+}
+
+
+def d_braille(b: bytes) -> bytes | None:
+    try:
+        s = b.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if not any(c in _BRAILLE_MAP for c in s):
+        return None
+    out = "".join(_BRAILLE_MAP.get(c, c) for c in s)
+    return out.encode("utf-8") if out != s else None
+
+
 TRANSFORMS = [
     ("base64", d_base64), ("base32", d_base32), ("base85", d_base85),
-    ("ascii85", d_ascii85), ("base58", d_base58), ("hex", d_hex),
-    ("decimal", d_decimal), ("binary", d_binary), ("morse", d_morse),
-    ("url", d_url), ("rot13", d_rot13),
-    ("rot47", d_rot47), ("atbash", d_atbash), ("reverse", d_reverse),
+    ("ascii85", d_ascii85), ("base58", d_base58), ("base62", d_base62),
+    ("hex", d_hex), ("decimal", d_decimal), ("binary", d_binary),
+    ("morse", d_morse), ("bacon", d_bacon), ("braille", d_braille),
+    ("url", d_url), ("rot13", d_rot13), ("rot47", d_rot47),
+    ("atbash", d_atbash), ("reverse", d_reverse),
     ("gzip", d_gzip), ("zlib", d_zlib),
 ]
+
 
 
 def xor_bruteforce(b: bytes) -> list[dict]:
