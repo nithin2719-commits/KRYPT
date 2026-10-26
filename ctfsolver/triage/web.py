@@ -37,6 +37,7 @@ COMMON_PATHS = [
     "/flag.txt", "/admin", "/backup", "/.htaccess", "/index.php.bak",
     "/api", "/status", "/debug", "/.svn/entries", "/config.php.bak",
     "/server-status", "/.DS_Store", "/swagger.json", "/graphql",
+    "/.well-known/security.txt",
 ]
 _FORM = re.compile(r"<form[^>]*>(.*?)</form>", re.I | re.S)
 _ACTION = re.compile(r'action\s*=\s*["\']([^"\']*)', re.I)
@@ -94,13 +95,34 @@ def triage(url: str, workdir: str) -> list[dict]:
                       "summary": f"{len(forms)} form(s) — test for SQLi/XSS/SSTI",
                       "output": "\n".join(forms[:20]), "flags": []})
 
-    # JWT in body/headers?
+    # JWT in body/headers? Auto-decode and sweep payload
     jwts = set(_COOKIE_JWT.findall(body)) | set(_COOKIE_JWT.findall(
         _curl(url, ["-D", "-", "-o", "/dev/null"]).stdout))
     if jwts:
+        jwt_details, jwt_flags = [], []
+        import base64
+        import json
+        for tok in list(jwts)[:5]:
+            parts = tok.split(".")
+            decoded_parts = []
+            for idx, part in enumerate(parts[:2]):
+                label = "Header" if idx == 0 else "Payload"
+                try:
+                    pad = "=" * (-len(part) % 4)
+                    raw_dec = base64.urlsafe_b64decode(part + pad).decode("utf-8", "replace")
+                    try:
+                        raw_dec = json.dumps(json.loads(raw_dec), indent=2)
+                    except Exception:
+                        pass
+                    decoded_parts.append(f"[{label}]\n{raw_dec}")
+                    jwt_flags.extend(scan_text(raw_dec))
+                except Exception:
+                    pass
+            jwt_details.append(f"TOKEN: {tok[:32]}...\n" + "\n".join(decoded_parts))
         steps.append({"step": "jwt",
-                      "summary": f"{len(jwts)} JWT(s) found — try alg:none / weak-secret",
-                      "output": "\n".join(list(jwts)[:5]), "flags": []})
+                      "summary": f"{len(jwts)} JWT(s) found and decoded (alg:none / secrets check)",
+                      "output": "\n\n".join(jwt_details), "flags": jwt_flags})
+
 
     # Tech fingerprint
     if have("whatweb"):
