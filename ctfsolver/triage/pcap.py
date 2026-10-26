@@ -31,6 +31,30 @@ def triage(path: str, workdir: str) -> list[dict]:
         steps.append({"step": "payloads",
                       "summary": "payload text swept for flags",
                       "output": blob[:2000], "flags": scan_text(blob)})
+
+        # DNS query sweep (catches DNS exfiltration challenges)
+        rdns = run(["tshark", "-r", path, "-T", "fields", "-e", "dns.qry.name"], timeout=45)
+        if rdns.ok() and rdns.stdout.strip():
+            queries = [q.strip() for q in rdns.stdout.splitlines() if q.strip()]
+            uniq_queries = list(dict.fromkeys(queries))
+            dns_flags = scan_text("\n".join(uniq_queries))
+            from ..flags import scan_encoded
+            dns_enc = scan_encoded("\n".join(uniq_queries).encode())
+            dns_flags = sorted(dns_flags + dns_enc, key=lambda f: -f["confidence"])
+            steps.append({"step": "dns-queries",
+                          "summary": f"{len(uniq_queries)} unique DNS query name(s) swept",
+                          "output": "\n".join(uniq_queries[:40]), "flags": dns_flags})
+
+        # Export HTTP objects (files transferred over HTTP)
+        http_dir = os.path.join(workdir, "pcap_http_objects")
+        os.makedirs(http_dir, exist_ok=True)
+        run(["tshark", "-r", path, "--export-objects", f"http,{http_dir}"], timeout=60)
+        exported = [os.path.join(http_dir, f) for f in os.listdir(http_dir)] if os.path.isdir(http_dir) else []
+        if exported:
+            steps.append({"step": "pcap-http-export",
+                          "summary": f"carved {len(exported)} file(s) transferred over HTTP",
+                          "output": "\n".join(os.path.basename(f) for f in exported[:30]),
+                          "flags": [], "artifacts": exported})
     else:
         # Fall back to strings over the raw capture
         r = run(["strings", "-n", "6", path], timeout=60)
