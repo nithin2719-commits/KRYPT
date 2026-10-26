@@ -26,6 +26,15 @@ def test_unbalanced_returns_none():
     assert run("+++[>+++") is None
 
 
+def test_ook_to_bf():
+    from ctfsolver.solvers.brainfuck import ook_to_bf
+    # 8 pluses then dot in Ook!: Ook. Ook. x8, then Ook! Ook.
+    ook_src = " ".join(["Ook. Ook."] * 65 + ["Ook! Ook."])
+    bf = ook_to_bf(ook_src)
+    assert run(bf) == b"A"
+
+
+
 if __name__ == "__main__":
     for n, fn in sorted(globals().items()):
         if n.startswith("test_") and callable(fn):

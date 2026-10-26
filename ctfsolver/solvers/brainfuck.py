@@ -61,6 +61,28 @@ def _printable(b: bytes) -> bool:
     return bool(b) and sum(1 for c in b if 9 <= c <= 13 or 32 <= c <= 126) / len(b) > 0.8
 
 
+OOK_MAP = {
+    ("Ook.", "Ook?"): ">",
+    ("Ook?", "Ook."): "<",
+    ("Ook.", "Ook."): "+",
+    ("Ook!", "Ook!"): "-",
+    ("Ook!", "Ook."): ".",
+    ("Ook.", "Ook!"): ",",
+    ("Ook!", "Ook?"): "[",
+    ("Ook?", "Ook!"): "]",
+}
+
+
+def ook_to_bf(src: str) -> str:
+    tokens = [tok for tok in src.split() if tok.startswith("Ook")]
+    bf = []
+    for i in range(0, len(tokens) - 1, 2):
+        pair = (tokens[i], tokens[i + 1])
+        if pair in OOK_MAP:
+            bf.append(OOK_MAP[pair])
+    return "".join(bf)
+
+
 def main():
     if len(sys.argv) < 2:
         print("USAGE: brainfuck.py <file>")
@@ -71,12 +93,16 @@ def main():
     except OSError as e:
         print(f"READ_FAILED {e}")
         return 2
+    is_ook = "Ook." in src and ("Ook!" in src or "Ook?" in src)
+    if is_ook:
+        src = ook_to_bf(src)
     if sum(1 for c in src if c in BF) < max(8, 0.5 * len(src.strip())):
         print("NOT_BRAINFUCK")
         return 1
     swap = {"[": "]", "]": "[", "<": ">", ">": "<"}
     mirror = "".join(swap.get(c, c) for c in src)[::-1]   # reversed + flipped
     variants = [("FORWARD", src), ("REVERSED", src[::-1]), ("MIRRORED", mirror)]
+
     seen, printed = set(), False
     for label, code in variants:
         out = run(code)

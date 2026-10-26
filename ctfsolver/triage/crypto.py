@@ -68,10 +68,11 @@ def triage(path: str, workdir: str) -> list[dict]:
     steps.append({"step": "preview", "summary": f"{len(data)} bytes",
                   "output": preview, "flags": scan_text(preview)})
 
-    # Esolang: Brainfuck (incl. reversed / "turnedaround" variants)
+    # Esolang: Brainfuck & Ook! (incl. reversed / "turnedaround" variants)
     src = data.decode("latin-1", "replace")
     bf = sum(1 for c in src if c in "><+-.,[]")
-    if bf >= 8 and bf / max(1, len(src.strip())) > 0.5:
+    is_ook = "Ook." in src and ("Ook!" in src or "Ook?" in src)
+    if (bf >= 8 and bf / max(1, len(src.strip())) > 0.5) or is_ook:
         py = sys.executable or "python3"
         r = run([py, os.path.join(_SOLVERS, "brainfuck.py"), path], timeout=60)
         if r.found and any(t in r.stdout for t in ("FORWARD", "REVERSED", "MIRRORED")):
