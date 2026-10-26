@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.4
+- **Expanded Crypto & Ciphers**:
+  - **Affine cipher brute-force**: tests all 312 possible keys (`(a, b)` pairs with `gcd(a, 26) == 1`) in under a millisecond.
+  - **Vigenère known-crib recovery**: mathematically derives repeating alphabetic keys from known flag wrappers (`flag{`, `picoCTF{`, or event format) and verifies cross-crib consistency with zero false positives.
+  - **Baconian cipher decoder**: decodes 5-bit character groups (A/B and 0/1 binary) supporting both 24-letter (I=J, U=V) and full 26-letter alphabets.
+  - **Base62 & Braille**: added Base62 (`0-9A-Za-z`) decode and unicode Braille alphabet decoding (`\u2800`–`\u28FF`) directly into the magic BFS.
+- **Esolangs (Ook! + Brainfuck)**:
+  - Added an **Ook!** translator directly into `brainfuck.py` and auto-detection in crypto triage to execute Ook! programs forward, reversed, and mirrored.
+- **Forensics & Stego**:
+  - **PCAP DNS exfiltration**: sweeps DNS query names, unpacks encoded subdomain prefixes, and flags exfiltrated credentials and tokens.
+  - **HTTP object carving**: extracts files transferred over HTTP into artifacts for recursive hunt.
+  - **Image trailer overlay carving**: automatically carves hidden data appended past image EOF markers (`IEND` in PNG, `FF D9` in JPEG, `3B` in GIF) into artifacts.
+- **Web Depth**:
+  - **JWT auto-unpacking**: automatically decodes base64url header and payload JSON in discovered tokens and sweeps claims for flags.
+  - Added `/.well-known/security.txt` to common CTF discovery paths.
+- **Branded Markdown writeups**:
+  - Markdown writeup exports now feature the official KRYPT masthead and formatted badge mirroring the PDF styling.
+
 ## v1.3
 - **Instant path gets the full decoder**: the "paste it / drop it and capture
   now" sweep (`instant_scan`, used by WATCH and every file's triage) no longer

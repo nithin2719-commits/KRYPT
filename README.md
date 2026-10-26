@@ -31,8 +31,8 @@ the easy answers run out.
 
 - **One input, every tool.** Category is detected automatically. Binaries, images, archives,
   pcaps, ciphertext, web targets and remote services each get their own triage.
-- **Peels layers on its own.** A breadth-first "magic" decoder chains base64/32/58/85, hex,
-  rot13/47, Caesar, atbash, Morse, gzip/zlib and XOR until a flag shows up.
+- **Peels layers on its own.** A breadth-first "magic" decoder chains base64/32/58/62/85, hex,
+  rot13/47, Caesar, Affine, Vigenère (crib-based), Baconian, Braille, atbash, Morse, gzip/zlib and XOR until a flag shows up.
 - **Recursive hunt.** Every carved or extracted file goes back through the full pipeline,
   so nested challenges unravel without you.
 - **Reads the challenge text.** Paste the briefing and KRYPT derives the flag format, sweeps
@@ -93,14 +93,14 @@ flowchart LR
    | Category | What runs |
    |---|---|
    | binary (pwn / rev) | checksec, readelf, nm/objdump, radare2, ROPgadget, angr, ret2win scaffold |
-   | image (stego) | zsteg, steghide, **stegseek + rockyou** |
+   | image (stego) | zsteg, steghide, **stegseek + rockyou**, **EOF trailer overlay carving** |
    | archive | 7z/unzip, detects `Encrypted=+` → **zip2john + rockyou** |
-   | pcap | capinfos, tshark, **USB HID keystroke decoder** |
+   | pcap | capinfos, tshark, **DNS exfiltration sweep**, **HTTP object carving**, **USB HID keystroke decoder** |
    | pdf | pdftotext, `qpdf --qdf` stream recovery, pdfdetach / pdfimages |
-   | text / data (crypto) | **magic BFS decoder**, Caesar brute, single- and repeating-key XOR (crib-based), RSA solver, hashid, auto john |
+   | text / data (crypto) | **magic BFS decoder**, Caesar brute, **Affine brute**, **Vigenère crib recovery**, **Baconian**, Base62/Braille, single- and repeating-key XOR, RSA solver, **Brainfuck / Ook!**, hashid, auto john |
    | osint | pulls usernames / emails / domains / phones from the briefing and runs sherlock, maigret, holehe, theHarvester, subfinder, phoneinfoga |
    | audio | metadata, strings, steghide on WAV, spectrogram render |
-   | url (web) | headers/body, common paths, forms, JWTs, whatweb, optional arjun |
+   | url (web) | headers/body, common paths, forms, **JWT auto-unpack & claim sweep**, whatweb, optional arjun |
    | host:port | banner grab plus benign auto-probes |
 
 4. **Recursive hunt.** Carved and extracted members are re-run through the full pipeline.
@@ -155,8 +155,8 @@ bind = ALT, T, exec, ~/ctf-solver/gui/launch.sh
 
 **WATCH — auto-hunt on drop.** Point KRYPT at folders and it hunts flags in every new or
 changed file the instant it appears — plaintext, a byte-level base64/hex decode, **and a
-recursive multi-codec decode chain** (base64/32/58/85, hex, rot13/47, atbash, reverse, morse,
-binary, decimal, URL, gzip/zlib, single-byte & crib XOR, Caesar — chained, e.g.
+recursive multi-codec decode chain** (base64/32/58/62/85, hex, rot13/47, atbash, reverse, morse,
+bacon, braille, binary, decimal, URL, gzip/zlib, single-byte & crib XOR, Caesar, Affine, Vigenère — chained, e.g.
 `base64 → hex → rot13`) — no click or re-run. Aim it at your browser's download folder during
 a live CTF. `--deep` runs the full pipeline per file;
 `--event` auto-saves captures to the Vault. The GUI has a matching **WATCH** row with a live
