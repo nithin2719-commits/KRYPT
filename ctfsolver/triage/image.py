@@ -38,9 +38,42 @@ def triage(path: str, workdir: str) -> list[dict]:
         from ..crack import crack_steghide
         steps.append(crack_steghide(path, workdir))
 
+    # Appended/overlay data after EOF marker (classic cat secret >> image trick)
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+        overlay = None
+        if lower.endswith(".png"):
+            idx = data.find(b"IEND\xae\x42\x60\x82")
+            if idx != -1 and idx + 8 < len(data):
+                overlay = data[idx + 8:]
+        elif lower.endswith((".jpg", ".jpeg")):
+            idx = data.rfind(b"\xff\xd9")
+            if idx != -1 and idx + 2 < len(data):
+                overlay = data[idx + 2:]
+        elif lower.endswith(".gif"):
+            idx = data.rfind(b"\x3b")
+            if idx != -1 and idx + 1 < len(data):
+                overlay = data[idx + 1:]
+
+        if overlay and len(overlay) > 0:
+            out_overlay = os.path.join(workdir, "trailing_overlay.bin")
+            with open(out_overlay, "wb") as ofh:
+                ofh.write(overlay)
+            from ..flags import scan_bytes, scan_encoded
+            ov_flags = scan_bytes(overlay) + scan_encoded(overlay)
+            steps.append({"step": "image-overlay",
+                          "summary": f"carved {len(overlay)} bytes of trailing data after EOF marker",
+                          "output": overlay[:500].decode("latin-1", "replace"),
+                          "flags": ov_flags,
+                          "artifacts": [out_overlay]})
+    except OSError:
+        pass
+
     steps.append({"step": "next",
                   "summary": "If nothing yet: check colour planes / palette by "
                              "eye, try zsteg on flipped bit-orders, or "
                              "stegsolve. Also run the generic sweep output above.",
                   "output": "", "flags": []})
+
     return steps
