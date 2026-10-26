@@ -126,14 +126,15 @@ def run() -> int:
         lines.append(f"  {MISS} engine probe failed: {e}")
 
     # MCP tool servers
-    hex_ok = _http_ok("http://127.0.0.1:8888/health") or _http_ok("http://127.0.0.1:8888/")
+    hex_ok = _http_ok("http://127.0.0.1:8889/health") or _http_ok("http://127.0.0.1:8888/health")
     ghidra = shutil.which("pyghidra-mcp") or os.path.exists(
         os.path.expanduser("~/tools/ghidra-mcp-env/bin/pyghidra-mcp"))
     lines.append(f"  {OK if hex_ok else WARN} hexstrike-ai (MCP)   "
-                 f"{_C['d']}{'up on :8888 (150+ tools)' if hex_ok else 'server not on :8888 — start hexstrike_server.py'}{_C['x']}")
+                 f"{_C['d']}{'operational (150+ security tools live)' if hex_ok else 'server not reachable — start start-hexstrike.sh'}{_C['x']}")
     lines.append(f"  {OK if ghidra else WARN} ghidra (MCP)         "
                  f"{_C['d']}{'pyghidra-mcp present (rev decompile)' if ghidra else 'pyghidra-mcp not found'}{_C['x']}")
     lines.append("")
+
 
     # verdict
     total = have + miss

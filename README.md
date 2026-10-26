@@ -147,6 +147,9 @@ bind = ALT, T, exec, ~/ctf-solver/gui/launch.sh
 ./ctf ./cipher.txt               # crypto / encodings
 ./ctf https://target/chal        # web
 ./ctf 10.10.10.5:1337            # remote service
+./ctf ./chal --agent agy         # escalate to autonomous AI + 150 MCP security tools
+./ctf ./chal --agent all         # parallel race across free triage, GPU, and MCP engines
+./ctf --briefing "ciphertext"   # fileless instant crypto / text / url solve
 ./ctf ./chal --ai                # + local Ollama hypothesis
 ./ctf ./chal --json              # machine-readable report
 ./ctf --watch ~/Downloads        # WATCH: auto-hunt files the moment they land

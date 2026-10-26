@@ -175,7 +175,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--doctor", action="store_true",
                     help="check the CTF environment (tools, wordlist, engines) "
                          "and print a readiness report")
+    ap.add_argument("--agent", choices=["claude", "agy", "all", "api"],
+                    help="escalate to autonomous AI/MCP agent to capture flag (claude, agy, all, api)")
+    ap.add_argument("--briefing", default="",
+                    help="challenge description / context to guide the hunt")
+    ap.add_argument("--flag-format", default="",
+                    help="custom flag format (e.g. picoCTF{...})")
     args = ap.parse_args(argv)
+
 
     if args.doctor:
         from . import doctor
@@ -187,7 +194,69 @@ def main(argv: list[str] | None = None) -> int:
                                interval=args.interval,
                                recursive=not args.no_recursive)
 
+    if args.agent:
+        target = args.target or ""
+        briefing = args.briefing or ""
+        if not target and not briefing:
+            ap.error("a target (or --briefing 'description') is required with --agent")
+
+        try:
+            from gui import server as gui_server
+        except ImportError:
+            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if repo_root not in sys.path:
+                sys.path.insert(0, repo_root)
+            from gui import server as gui_server
+
+        if args.agent == "agy":
+            os.environ["KRYPT_AGY_YOLO"] = "1"
+
+        print(f"[*] Escalating to autonomous agent ({args.agent})...", file=sys.stderr)
+        if args.agent == "all":
+            res = gui_server.escalate(target, description=briefing, event=args.event or "", flag_format=args.flag_format)
+        else:
+            res = gui_server.deep(target, description=briefing, provider=args.agent, event=args.event or "", flag_format=args.flag_format)
+
+        md = res.get("markdown") or to_markdown(res)
+        workdir = res.get("workdir")
+        if workdir:
+            with open(os.path.join(workdir, "report.md"), "w") as fh:
+                fh.write(md)
+            with open(os.path.join(workdir, "report.json"), "w") as fh:
+                json.dump(res, fh, indent=2, default=str)
+
+        print(json.dumps(res, indent=2, default=str) if args.json else md)
+
+        if res.get("flags"):
+            top = res["flags"][0]
+            print(f"\n>>> CAPTURED FLAG: {top['flag']}", file=sys.stderr)
+            return 0
+        return 2
+
     if not args.target:
+        if args.briefing:
+            try:
+                from gui import server as gui_server
+            except ImportError:
+                repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if repo_root not in sys.path:
+                    sys.path.insert(0, repo_root)
+                from gui import server as gui_server
+            res = gui_server.solve("", description=args.briefing, use_ai=args.ai,
+                                   event=args.event or "", flag_format=args.flag_format)
+            md = res.get("markdown") or to_markdown(res)
+            workdir = res.get("workdir")
+            if workdir:
+                with open(os.path.join(workdir, "report.md"), "w") as fh:
+                    fh.write(md)
+                with open(os.path.join(workdir, "report.json"), "w") as fh:
+                    json.dump(res, fh, indent=2, default=str)
+            print(json.dumps(res, indent=2, default=str) if args.json else md)
+            if res.get("flags"):
+                top = res["flags"][0]
+                print(f"\n>>> TOP CANDIDATE: {top['flag']}", file=sys.stderr)
+                return 0
+            return 2
         ap.error("a target is required (or use --watch DIR ... for watch mode)")
 
     res = run_pipeline(args.target)

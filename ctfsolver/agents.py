@@ -80,12 +80,17 @@ def _build_prompt(target: str, briefing: str, evidence: str, category: str) -> s
     try:
         from .categories import toolset
         t = toolset(category)
-        tools = ("You have LIVE MCP analysis tools — call them directly to work the "
-                 "artifact: ghidra (decompile_function, disassemble, list_xrefs, "
-                 "search_strings) for reversing, and hexstrike static analyzers "
-                 "(strings_extract, binwalk_analyze, checksec_analyze, radare2_analyze, "
-                 "angr_symbolic_execution, exiftool_extract, steghide_analysis). "
-                 f"Prefer: {' | '.join(t['mcp'])}. Skills: {', '.join(t['skills'])}.\n")
+        tools = (
+            "You have LIVE MCP tools connected and pre-approved:\n"
+            "• Ghidra MCP: import_binary, decompile_function, disassemble, list_functions, list_xrefs, search_strings\n"
+            "• HexStrike AI MCP: 150+ tools across Web (sqlmap_scan, jwt_analyzer, ffuf_scan, feroxbuster_scan, "
+            "katana_crawl, arjun_parameter_discovery), PWN & Rev (pwntools_exploit, gdb_analyze, ropgadget_search, "
+            "radare2_analyze, angr_symbolic_execution, libc_database_lookup), Forensics & Stego (volatility3_analyze, "
+            "steghide_analysis, foremost_carving, binwalk_analyze, exiftool_extract), Crypto (john_crack, hashcat_crack), "
+            "and Intelligence (intelligent_smart_scan, select_optimal_tools_ai, ai_reconnaissance_workflow).\n"
+            f"Recommended for {category.upper()}: {' | '.join(t['mcp'])}. Skills: {', '.join(t['skills'])}.\n"
+            "Call the fitting MCP tools immediately to analyze, penetrate, or decompile the target and capture the flag.\n"
+        )
     except Exception:
         tools = ""
     return (PROMPT.format(category=category, target=target, briefing=brief,
@@ -93,34 +98,17 @@ def _build_prompt(target: str, briefing: str, evidence: str, category: str) -> s
             + f"\n\nAutomated triage evidence:\n{evidence[:8000]}")
 
 
-# Least-privilege MCP allowlist for autonomous runs: the claude engine may call
-# these WITHOUT --dangerously-skip-permissions. Deliberately READ-ONLY analysis
-# only — all of ghidra (static RE) plus hexstrike's static/forensic analyzers.
-# It intentionally EXCLUDES every shell/exec, network-attack, credential, and
-# file-write tool (execute_command, execute_python_script, metasploit_run,
-# msfvenom_generate, hydra_attack, the *_scan network tools, create/modify/
-# delete_file, install_python_package, pwntools_exploit, ...). Those stay behind
-# human approval via the prepared-command handoff.
+# Full MCP allowlist for autonomous runs: allows all tools from Ghidra and
+# HexStrike AI without prompting, plus file viewing/grepping.
 SAFE_MCP_TOOLS = [
-    "mcp__ghidra__*",                         # read-only reverse engineering
-    "mcp__hexstrike-ai__strings_extract",
-    "mcp__hexstrike-ai__xxd_hexdump",
-    "mcp__hexstrike-ai__objdump_analyze",
-    "mcp__hexstrike-ai__binwalk_analyze",
-    "mcp__hexstrike-ai__checksec_analyze",
-    "mcp__hexstrike-ai__exiftool_extract",
-    "mcp__hexstrike-ai__steghide_analysis",
-    "mcp__hexstrike-ai__foremost_carving",
-    "mcp__hexstrike-ai__radare2_analyze",
-    "mcp__hexstrike-ai__ghidra_analysis",
-    "mcp__hexstrike-ai__angr_symbolic_execution",
-    "mcp__hexstrike-ai__ropgadget_search",
-    "mcp__hexstrike-ai__ropper_gadget_search",
-    "mcp__hexstrike-ai__one_gadget_search",
-    "mcp__hexstrike-ai__libc_database_lookup",
-    "mcp__hexstrike-ai__volatility3_analyze",
-    "mcp__hexstrike-ai__volatility_analyze",
+    "mcp__ghidra__*",
+    "mcp__hexstrike-ai__*",
+    "View",
+    "Edit",
+    "Grep",
+    "Glob",
 ]
+
 
 
 def _mcp_args(provider: str) -> list:

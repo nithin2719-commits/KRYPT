@@ -7,3 +7,4 @@ __pycache__/
 .venv/
 # ghidra MCP runtime project data (regenerated on demand — not source)
 pyghidra_mcp_projects/
+*.log

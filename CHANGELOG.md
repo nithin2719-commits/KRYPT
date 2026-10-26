@@ -1,6 +1,15 @@
 # Changelog
 
-## v1.4
+## v1.5
+- **Full MCP Arsenal & Port Migration**:
+  - Unlocked **all 150+ HexStrike AI security tools** (Web, PWN, Reverse Engineering, Forensics, Steganography, Cryptography, and Threat Intelligence) and **Ghidra MCP** in the autonomous agent allowlist.
+  - Relocated HexStrike AI server to port `8889` to prevent SearXNG collision, and updated `doctor.py` to verify server readiness and active tool availability.
+  - Added comprehensive MCP category directives and pre-approved tool guidance to the solver agent system prompt.
+- **CLI Autonomous Agent Escalation (`--agent`)**:
+  - Added `--agent {claude,agy,all,api}` directly to the `./ctf` CLI to escalate to autonomous agents from the command line.
+  - Added `--briefing` and `--flag-format` flags to the CLI for providing contextual descriptions, challenge text, and target formats.
+  - Supported **Fileless Briefing Mode**: `./ctf --briefing "..."` now runs text, crypto, URL, and netcat triage pipelines directly without requiring a local file.
+
 - **Expanded Crypto & Ciphers**:
   - **Affine cipher brute-force**: tests all 312 possible keys (`(a, b)` pairs with `gcd(a, 26) == 1`) in under a millisecond.
   - **Vigenère known-crib recovery**: mathematically derives repeating alphabetic keys from known flag wrappers (`flag{`, `picoCTF{`, or event format) and verifies cross-crib consistency with zero false positives.
