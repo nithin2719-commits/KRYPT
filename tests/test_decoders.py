@@ -142,6 +142,43 @@ def test_no_false_flag_on_random_bytes():
         assert not magic(blob)["found"]
 
 
+def test_affine_cipher():
+    # Affine cipher: C = (5 * P + 8) % 26
+    pt = "flag{affine_cipher_solved_by_krypt}"
+    a, b = 5, 8
+    ct = []
+    for c in pt:
+        if "a" <= c <= "z":
+            ct.append(chr(((ord(c) - 97) * a + b) % 26 + 97))
+        else:
+            ct.append(c)
+    ct_bytes = "".join(ct).encode()
+    r = magic(ct_bytes)
+    assert r["found"]
+    assert any(f["flag"] == pt for f in r["flags"])
+
+
+def test_vigenere_crib():
+    # Vigenere with key 'secret' and picoCTF crib
+    pt = "picoCTF{vigenere_crib_recovered}"
+    key = "secret"
+    ct = []
+    ki = 0
+    for c in pt:
+        if "a" <= c <= "z":
+            ct.append(chr((ord(c) - 97 + (ord(key[ki % len(key)]) - 97)) % 26 + 97))
+            ki += 1
+        elif "A" <= c <= "Z":
+            ct.append(chr((ord(c) - 65 + (ord(key[ki % len(key)]) - 97)) % 26 + 65))
+            ki += 1
+        else:
+            ct.append(c)
+    ct_bytes = "".join(ct).encode()
+    r = magic(ct_bytes)
+    assert r["found"]
+    assert any(f["flag"] == pt for f in r["flags"])
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

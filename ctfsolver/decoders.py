@@ -279,6 +279,90 @@ def caesar_bruteforce(b: bytes) -> list[dict]:
     return hits
 
 
+_AFFINE_A = (1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23, 25)
+_AFFINE_INV = {a: pow(a, -1, 26) for a in _AFFINE_A}
+
+
+def affine_bruteforce(b: bytes) -> list[dict]:
+    """Try all 312 Affine cipher keys (12 coprimes * 26 shifts).
+    C = (a * P + b) % 26 -> P = (a_inv * (C - b)) % 26.
+    Strict scan guarantees zero false positives.
+    """
+    try:
+        s = b.decode("ascii")
+    except UnicodeDecodeError:
+        return []
+    if not any(c.isalpha() for c in s):
+        return []
+    hits = []
+    for a in _AFFINE_A:
+        if a == 1:
+            continue  # a=1 is Caesar brute-force, already tested
+        a_inv = _AFFINE_INV[a]
+        for shift in range(26):
+            out = []
+            for c in s:
+                if "a" <= c <= "z":
+                    out.append(chr((a_inv * (ord(c) - 97 - shift)) % 26 + 97))
+                elif "A" <= c <= "Z":
+                    out.append(chr((a_inv * (ord(c) - 65 - shift)) % 26 + 65))
+                else:
+                    out.append(c)
+            dec = "".join(out)
+            fl = scan_text(dec, strict=True)
+            if fl:
+                hits.append({"a": a, "b": shift, "text": dec, "flags": fl})
+    return hits
+
+
+def vigenere_crib(b: bytes) -> list[dict]:
+    """Recover a repeating alphabetic key using known flag crib prefixes.
+    For key length 1 <= klen < len(crib_alpha), derives the key and verifies
+    that it matches across all crib characters (overconstrained check),
+    ensuring no false positives.
+    """
+    try:
+        s = b.decode("ascii")
+    except UnicodeDecodeError:
+        return []
+    s_alpha = [c for c in s if c.isalpha()]
+    if len(s_alpha) < 5:
+        return []
+    for raw_crib in _xor_cribs():
+        try:
+            crib = raw_crib.decode("ascii")
+        except Exception:
+            continue
+        c_alpha = [c for c in crib if c.isalpha()]
+        clen = len(c_alpha)
+        if len(s_alpha) < clen + 1:
+            continue
+        for klen in range(1, clen):
+            k = [(ord(s_alpha[i].lower()) - ord(c_alpha[i].lower())) % 26 for i in range(klen)]
+            # Verify repeating key reproduces the ENTIRE crib
+            if not all((ord(s_alpha[i].lower()) - 97 - k[i % klen]) % 26 == (ord(c_alpha[i].lower()) - 97)
+                       for i in range(clen)):
+                continue
+            keystr = "".join(chr(x + 97) for x in k)
+            # Decrypt full string
+            res = []
+            ki = 0
+            for c in s:
+                if "a" <= c <= "z":
+                    res.append(chr((ord(c) - 97 - k[ki % klen]) % 26 + 97))
+                    ki += 1
+                elif "A" <= c <= "Z":
+                    res.append(chr((ord(c) - 65 - k[ki % klen]) % 26 + 65))
+                    ki += 1
+                else:
+                    res.append(c)
+            dec = "".join(res)
+            fl = scan_text(dec, strict=True)
+            if fl:
+                return [{"key": keystr, "text": dec, "flags": fl}]
+    return []
+
+
 def _xor_cribs() -> list[bytes]:
     """Known-plaintext prefixes a flag is likely to start with."""
     cribs = [b"flag{", b"FLAG{", b"CTF{", b"picoCTF{", b"HTB{",
@@ -396,6 +480,16 @@ def magic(data: bytes, max_depth: int = 8, max_nodes: int = 500) -> dict:
         for hit in xor_repeating_crib(cur) if len(cur) <= 8192 else []:
             return {"found": True, "flags": hit["flags"],
                     "path": path + [f"xor-key({hit['key'].hex()})"],
+                    "sample": hit["text"][:400]}
+        # affine terminal check (all 312 keys)
+        for hit in affine_bruteforce(cur) if len(cur) <= 4096 else []:
+            return {"found": True, "flags": hit["flags"],
+                    "path": path + [f"affine(a={hit['a']},b={hit['b']})"],
+                    "sample": hit["text"][:400]}
+        # vigenere crib recovery
+        for hit in vigenere_crib(cur) if len(cur) <= 8192 else []:
+            return {"found": True, "flags": hit["flags"],
+                    "path": path + [f"vigenere(key={hit['key']})"],
                     "sample": hit["text"][:400]}
 
         if len(path) >= max_depth or len(cur) > _BRANCH_MAX:
