@@ -505,6 +505,15 @@ class CTFWorker:
                         found_flags.append(f)
                 except Exception:
                     pass
+                if lower_target.endswith(".png"):
+                    try:
+                        from .solvers import png_forensics
+                        png_res = png_forensics.solve(target, task.workdir)
+                        for f in png_res.get("flags", []):
+                            f["source"] = "png_forensics_solver"
+                            found_flags.append(f)
+                    except Exception:
+                        pass
             elif lower_target.endswith((".wav", ".mp3", ".ogg", ".flac")):
                 try:
                     from .solvers import audio_deep

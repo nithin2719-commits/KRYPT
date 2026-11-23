@@ -150,6 +150,16 @@ def triage(path: str, workdir: str) -> list[dict]:
     txt = data.decode("latin-1", "replace")
     if re.search(r"\bn\s*[:=]\s*[0-9]", txt) and re.search(r"\be\s*[:=]\s*[0-9]", txt) \
             or ("-----BEGIN" in txt and "KEY-----" in txt):
+        # 1. Pure-Python RSA attacks suite (fast: small-e, Wiener, Fermat, Pollard, Hastad)
+        try:
+            from ..solvers import rsa_attacks
+            rsa_res = rsa_attacks.solve(path, workdir)
+            if rsa_res.get("flags") or rsa_res.get("output"):
+                steps.append(rsa_res)
+        except Exception:
+            pass
+
+        # 2. External RsaCtfTool fallback
         py = sys.executable or "python3"
         r = run([py, os.path.join(_SOLVERS, "rsa_solve.py"), path], timeout=300)
         if r.found:
@@ -157,6 +167,15 @@ def triage(path: str, workdir: str) -> list[dict]:
             steps.append({"step": "rsa-attack",
                           "summary": "RsaCtfTool attack suite",
                           "output": body[:3000], "flags": scan_text(body)})
+
+    # Pure-Python XOR cryptanalysis (single-byte brute, repeating-key Kasiski, known-plaintext)
+    try:
+        from ..solvers import xor_solver
+        xor_res = xor_solver.solve(path, workdir)
+        if xor_res.get("flags"):
+            steps.append(xor_res)
+    except Exception:
+        pass
 
     # Z3 constraint equation block auto-solve (crackmes, linear/bitwise systems)
     try:

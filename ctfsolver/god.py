@@ -140,12 +140,24 @@ class GodSolver:
                     return ("z3", z3_solve.scan_and_solve(text_for_z3))
                 solver_tasks.append(executor.submit(run_z3))
 
-            # 2. SageMath Lattice & RSA Solver
-            if text_for_z3 and ("BEGIN" in text_for_z3 or any(k in text_for_z3 for k in ("n =", "e =", "c ="))):
+            # 2. RSA Pure-Python & SageMath Lattice Solver
+            if text_for_z3 and ("BEGIN" in text_for_z3 or any(k in text_for_z3.lower() for k in ("n =", "e =", "c =", "n:", "e:", "c:"))):
+                def run_rsa():
+                    from .solvers import rsa_attacks
+                    return ("rsa_attacks", rsa_attacks.solve(target or text_for_z3, safe_workdir))
+                solver_tasks.append(executor.submit(run_rsa))
+
                 def run_sage():
                     from .solvers import sage_crypto
                     return ("sage", sage_crypto.parse_and_attack(text_for_z3))
                 solver_tasks.append(executor.submit(run_sage))
+
+            # 2b. Pure-Python XOR Cryptanalysis Suite
+            if target or text_for_z3:
+                def run_xor():
+                    from .solvers import xor_solver
+                    return ("xor_solver", xor_solver.solve(target or text_for_z3, safe_workdir))
+                solver_tasks.append(executor.submit(run_xor))
 
             # 3. Visual & QR Stego (if image)
             if target and target.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")):
@@ -153,6 +165,12 @@ class GodSolver:
                     from .solvers import qr_visual
                     return ("qr", qr_visual.solve(target, safe_workdir))
                 solver_tasks.append(executor.submit(run_qr))
+
+                if target.lower().endswith(".png"):
+                    def run_png():
+                        from .solvers import png_forensics
+                        return ("png_forensics", png_forensics.solve(target, safe_workdir))
+                    solver_tasks.append(executor.submit(run_png))
 
             # 4. Audio Deep & DTMF (if audio)
             if target and target.lower().endswith((".wav", ".mp3", ".ogg", ".flac")):

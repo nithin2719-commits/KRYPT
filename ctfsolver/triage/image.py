@@ -20,6 +20,15 @@ def triage(path: str, workdir: str) -> list[dict]:
     except Exception:
         pass
 
+    if lower.endswith(".png"):
+        try:
+            from ..solvers import png_forensics
+            png_step = png_forensics.solve(path, workdir)
+            if png_step.get("flags") or png_step.get("artifacts"):
+                steps.append(png_step)
+        except Exception:
+            pass
+
     # zsteg for PNG/BMP LSB channels
     if have("zsteg") and lower.endswith((".png", ".bmp")):
         r = run(["zsteg", "-a", path], timeout=90)

@@ -1,5 +1,37 @@
 # Changelog
 
+## v2.5 — Pure-Python RSA Attacks, XOR Cryptanalysis & Deep PNG Forensics
+- **Pure-Python RSA Attack Suite (`ctfsolver/solvers/rsa_attacks.py`)**:
+  - Implements direct cryptographic attacks on RSA without external binary dependencies:
+    - Small/low public exponent attack ($m^e < n$, small $k \cdot n + c$ root search).
+    - Wiener's continued fractions attack for small private exponent ($d < n^{0.25}$).
+    - Fermat's factorization for close primes ($|p - q| \ll \sqrt{n}$).
+    - Pollard's $p - 1$ factorization for $B$-smooth primes.
+    - Common factor (pairwise GCD) across multiple moduli and common modulus (coprime exponents).
+    - Hastad's broadcast attack using Chinese Remainder Theorem (CRT) and integer $e$-th root.
+    - LSB / Parity Oracle bit-by-bit recovery via exact rational binary search.
+    - Simplified Boneh-Durfee attack for small $d$ up to $n^{0.292}$.
+    - FactorDB online database lookup and small-prime trial division.
+    - Flexible parameter parser for free-form text, multi-line assignments, and PEM keys.
+- **XOR Cryptanalysis Suite (`ctfsolver/solvers/xor_solver.py`)**:
+  - Pure-Python XOR cryptanalysis:
+    - Single-byte XOR brute-force with ETAOINSHRDLU character frequency scoring.
+    - Repeating-key XOR solver via Kasiski examination, Index of Coincidence (IoC), and normalized pairwise Hamming distance.
+    - Known-plaintext keystream recovery and primitive period simplification.
+    - Many-time pad space-correlation attack across multiple ciphertexts and crib-dragging.
+- **Deep PNG Forensics Solver (`ctfsolver/solvers/png_forensics.py`)**:
+  - Complete structural PNG parser and validator:
+    - Chunk parser with CRC32 verification and anomaly reporting.
+    - Text chunk extractor (`tEXt`, `zTXt`, `iTXt`) with flag sweeping.
+    - IHDR dimension validation, CRC brute-force dimension recovery, and trailing IDAT scanline height calculation.
+    - Trailing overlay data extraction after `IEND`.
+    - Palette/PLTE stego analysis (unused palette entries, per-channel bitstreams).
+    - LSB replacement detection via Pairs of Values (PoV) $\chi^2$ and channel bitstream extraction.
+- **Triage & Apex Pipeline Integration**:
+  - Wired into `ctfsolver/god.py`, `ctfsolver/worker.py`, `ctfsolver/triage/crypto.py`, and `ctfsolver/triage/image.py`.
+- **Test Suite**:
+  - Added `tests/test_png_forensics.py` and `tests/test_rsa_xor.py` (total 123 passing unit tests).
+
 ## v2.4 — Apex Multi-Tier Autonomous Solver
 - **Apex Multi-Tier Engine (`ctfsolver/god.py`)**:
   - Orchestrates all four solver tiers concurrently in an apex autonomous pipeline:
