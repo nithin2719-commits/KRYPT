@@ -156,6 +156,31 @@ class TestAdvancedSolvers(unittest.TestCase):
         flag_strs = [f["flag"] for f in res.get("flags", [])]
         self.assertIn("flag{xml_office_comment}", flag_strs)
 
+    def test_sage_crypto_common_modulus(self):
+        from ctfsolver.solvers import sage_crypto
+        p, q = 1000000007, 1000000009
+        n = p * q
+        e1, e2 = 17, 65537
+        m = 133742
+        c1 = pow(m, e1, n)
+        c2 = pow(m, e2, n)
+        res = sage_crypto.common_modulus_attack(n, e1, e2, c1, c2)
+        self.assertEqual(res, m)
+
+    def test_payload_forge_pickle_and_jinja(self):
+        from ctfsolver.solvers import payload_forge
+        pickle_p = payload_forge.generate_pickle_payload("cat /flag", encode_b64=True)
+        self.assertTrue(len(pickle_p) > 20)
+        jinja_p = payload_forge.generate_jinja2_ssti_escapes("cat /flag")
+        self.assertTrue(len(jinja_p) >= 3)
+        self.assertIn("lipsum", [j["payload"] for j in jinja_p if "lipsum" in j["payload"]][0])
+
+    def test_sidechannel_fallback(self):
+        from ctfsolver.solvers import sidechannel_solve
+        res = sidechannel_solve.solve("/nonexistent/binary", self.tmp_dir)
+        self.assertEqual(res.get("step"), "sidechannel-crackme")
+        self.assertFalse(res.get("flags"))
+
 
 if __name__ == "__main__":
     unittest.main()

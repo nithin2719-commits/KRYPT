@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.3 — Hard CTF Solvers: SageMath Lattices, Side-Channel Crackmes & Payload Forge
+- **SageMath Lattice & Hard RSA Engine (`ctfsolver/solvers/sage_crypto.py`)**:
+  - Coppersmith's small root attack for stereotyped messages ($m^e \pmod N$ with known `flag{` prefix) using univariate polynomial root finding over $\mathbb{Z}_N$.
+  - Common Modulus attack using extended Euclidean algorithm ($r e_1 + s e_2 = 1$).
+  - Hastad's Broadcast attack combining multiple ciphertexts via Chinese Remainder Theorem (CRT) and computing integer $e$-th roots.
+  - Integrated into crypto triage (`ctfsolver/triage/crypto.py`) and worker Tier 2 pipeline.
+- **Side-Channel Timing & GDB Instruction Counting Crackme Solver (`ctfsolver/solvers/sidechannel_solve.py`)**:
+  - Automated character-by-character crackme solver utilizing timing differential measurements and GDB batch instruction counters to break through non-symbolic verification loops and custom hashes.
+- **Weaponized Payload Forge & Sandbox Escapes (`ctfsolver/solvers/payload_forge.py`)**:
+  - Python pickle deserialization RCE payload generator (`__reduce__`).
+  - Jinja2 SSTI filter bypass generator (attribute filters, string concatenation, lipsum/cycler globals).
+  - Node.js `node-serialize` IIFE remote code execution generator.
+  - Integrated into web triage (`ctfsolver/triage/web.py`).
+- **Test Suite Expansion**:
+  - Added test cases covering common modulus recovery, pickle/Jinja2 payload synthesis, and sidechannel fallback mechanics (105 unit tests passing with 100% success).
+
 ## v2.2 — Advanced Domain Solvers & Queue Strategy Engine
 - **Visual Steganography & QR/Barcode Solver (`ctfsolver/solvers/qr_visual.py`)**:
   - Multi-engine QR, DataMatrix, and barcode reader (`pyzbar`, `zxingcpp`) with pre-processing (inversion, contrast boost, binary thresholding).

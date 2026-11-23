@@ -182,6 +182,15 @@ def triage(path: str, workdir: str) -> list[dict]:
     except Exception:
         pass
 
+    # SageMath lattice & advanced RSA attacks (Coppersmith, common modulus, Hastad)
+    try:
+        from ..solvers import sage_crypto
+        sage_res = sage_crypto.parse_and_attack(txt)
+        if sage_res.get("flags") or "No matching" not in sage_res.get("output", ""):
+            steps.append(sage_res)
+    except Exception:
+        pass
+
     steps.append({"step": "next",
                   "summary": "If this is classical/again encoded, try CyberChef-"
                              "style chains; for RSA use ~/tools/RsaCtfTool; for "

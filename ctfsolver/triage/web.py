@@ -145,6 +145,14 @@ def triage(url: str, workdir: str) -> list[dict]:
                           "summary": "hidden parameter discovery",
                           "output": out.stdout[:2000], "flags": []})
 
+    # Weaponized Exploit Payload Forge (Pickle, Node-serialize, Jinja2 SSTI)
+    try:
+        from ..solvers import payload_forge
+        forge_res = payload_forge.solve("cat flag*")
+        steps.append(forge_res)
+    except Exception:
+        pass
+
     steps.append({"step": "next",
                   "summary": "Deeper: feroxbuster/ffuf for content discovery, "
                              "nuclei for CVEs, sqlmap on the forms above, and the "

@@ -484,6 +484,15 @@ class CTFWorker:
                         f["source"] = "rsa_solver"
                         found_flags.append(f)
 
+                try:
+                    from .solvers import sage_crypto
+                    sage_res = sage_crypto.parse_and_attack(content_to_check)
+                    for f in sage_res.get("flags", []):
+                        f["source"] = "sage_crypto_solver"
+                        found_flags.append(f)
+                except Exception:
+                    pass
+
         # FORENSICS & STEGO: QR codes, LSB planes, deep PCAP, deep audio
         if (cat in ("forensics", "image", "stego", "auto")) and target and os.path.isfile(target):
             lower_target = target.lower()
