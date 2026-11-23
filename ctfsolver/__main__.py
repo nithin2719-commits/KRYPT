@@ -154,8 +154,8 @@ def to_markdown(res: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ctf-solver")
-    ap.add_argument("target", nargs="?",
-                    help="file path, http(s) URL, host:port, or command ('worker', 'queue', 'submit', 'sync')")
+    ap.add_argument("target", nargs="*",
+                    help="file path, http(s) URL, host:port, or command ('worker', 'queue [list|clear|add]', 'submit <flag>', 'sync')")
     ap.add_argument("--ai", action="store_true",
                     help="also ask the local Ollama model for a hypothesis")
     ap.add_argument("--json", action="store_true",
@@ -218,7 +218,9 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     # Subcommand normalization
-    cmd = (args.target or "").lower().strip()
+    raw_targets = args.target if isinstance(args.target, list) else ([args.target] if args.target else [])
+    cmd = raw_targets[0].lower().strip() if raw_targets else ""
+
     if cmd == "worker":
         args.worker = True
         args.target = ""
@@ -226,12 +228,22 @@ def main(argv: list[str] | None = None) -> int:
         args.sync = True
         args.target = ""
     elif cmd == "queue":
-        args.queue_list = True
         args.target = ""
+        sub = raw_targets[1].lower().strip() if len(raw_targets) > 1 else "list"
+        if sub == "clear":
+            args.queue_clear = True
+        elif sub == "add" and len(raw_targets) > 2:
+            args.queue_add = raw_targets[2]
+        else:
+            args.queue_list = True
     elif cmd in ("submit", "flag"):
-        if args.briefing and not args.submit:
-            args.submit = args.briefing
         args.target = ""
+        if len(raw_targets) > 1:
+            args.submit = raw_targets[1]
+        elif args.briefing and not args.submit:
+            args.submit = args.briefing
+    else:
+        args.target = raw_targets[0] if raw_targets else ""
 
     if args.doctor:
         from . import doctor
