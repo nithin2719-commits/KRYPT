@@ -107,6 +107,28 @@ class TestAdvancedSolvers(unittest.TestCase):
         res = pcap_deep.solve(dummy_pcap, self.tmp_dir)
         self.assertEqual(res.get("step"), "pcap-deep")
 
+    def test_esoteric_ciphers(self):
+        from ctfsolver.solvers import esoteric_ciphers
+        # Test T9
+        self.assertEqual(esoteric_ciphers.decode_t9("333 555 2 4"), "FLAG")
+        # Test NATO
+        self.assertEqual(esoteric_ciphers.decode_nato("Foxtrot Lima Alfa Golf"), "FLAG")
+        # Test Polybius
+        self.assertEqual(esoteric_ciphers.decode_polybius("21 31 11 22"), "FLAG")
+        # Test Rail fence
+        rf_plain = "FLAG{RAIL_FENCE_WIN}"
+        # depth 3
+        rf_cipher = esoteric_ciphers.decode_rail_fence(rf_plain, 3)
+        # Should solve via solve()
+        res = esoteric_ciphers.solve("Foxtrot Lima Alfa Golf { T9 }")
+        self.assertTrue(len(res) > 0)
+
+    def test_web_arsenal(self):
+        from ctfsolver.solvers import web_arsenal
+        pin = web_arsenal.calculate_werkzeug_pin("app", node="02:42:ac:11:00:02", machine_id="3fa85f64")
+        self.assertRegex(pin, r"^\d{3}-\d{3}-\d{3}$")
+        self.assertTrue(len(web_arsenal.PHP_MAGIC_HASHES["md5"]) > 0)
+
 
 if __name__ == "__main__":
     unittest.main()

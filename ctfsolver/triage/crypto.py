@@ -170,6 +170,18 @@ def triage(path: str, workdir: str) -> list[dict]:
     except Exception:
         pass
 
+    # Esoteric & Classical Ciphers (DNA, T9 keypad, NATO phonetic, Polybius, Rail Fence, COW)
+    try:
+        from ..solvers import esoteric_ciphers
+        eso_results = esoteric_ciphers.solve(txt)
+        for eso in eso_results:
+            steps.append({"step": f"cipher-{eso['method']}",
+                          "summary": f"deciphered via {eso['method']}",
+                          "output": eso['text'][:1000],
+                          "flags": eso.get("flags", [])})
+    except Exception:
+        pass
+
     steps.append({"step": "next",
                   "summary": "If this is classical/again encoded, try CyberChef-"
                              "style chains; for RSA use ~/tools/RsaCtfTool; for "

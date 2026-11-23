@@ -25,10 +25,26 @@
   - Integrated into network triage (`ctfsolver/triage/pcap.py`) and worker Tier 2 pipeline.
 - **ret2libc Exploit Scaffold (`ctfsolver/solvers/pwn_scaffold.py`)**:
   - Expanded pwn scaffolding beyond ret2win to generate complete 64-bit ret2libc exploits with `puts@got` leaks and `system('/bin/sh')` shellcode.
+- **Esoteric & Classical Ciphers Engine (`ctfsolver/solvers/esoteric_ciphers.py`)**:
+  - DNA codon amino-acid translation and 2-bit binary mapping (`A=00, C=01, G=10, T=11`).
+  - T9 phone keypad multi-tap decoder (`222 8 333` -> `ctf`).
+  - NATO phonetic alphabet decoder (`Alfa Bravo Charlie` -> `ABC`).
+  - Polybius square 5x5 coordinate decipher.
+  - Rail fence transposition cipher brute-force (depths 2 to 10).
+  - COW esoteric programming language interpreter.
+  - Integrated into crypto triage (`ctfsolver/triage/crypto.py`).
+- **Web Arsenal (`ctfsolver/solvers/web_arsenal.py`)**:
+  - Werkzeug Debug Console PIN calculator (from leaked node & machine-id).
+  - PHP loose comparison magic hashes (`0e...`) identifier.
+  - Automated Local File Inclusion (LFI) parameter prober (`../../../../etc/passwd`, `php://filter/`).
+  - Integrated into web triage (`ctfsolver/triage/web.py`).
+- **GitHub Tool Arsenal Integration (`ctfsolver/research.py`)**:
+  - Installed and cataloged `autorop` (`~/tools/autorop`) for automated ret2libc / ret2shellcode pwn pipelines.
+  - Installed and cataloged `libc-database` (`~/tools/libc-database`) for remote libc symbol offset lookups.
 - **Queue Priority Strategy Controls (`ctfsolver/worker.py`, `ctfsolver/__main__.py`)**:
   - Added `--strategy {fifo, easy-first, high-points}` to allow tactical challenge scheduling during competitions.
 - **Test Suite Expansion**:
-  - Added `tests/test_advanced_solvers.py` (97 unit tests passing with 100% success).
+  - Added `tests/test_advanced_solvers.py` (99 unit tests passing with 100% success).
 
 ## v2.1 — Multi-Agent Swarm Orchestrator & Dynamic Tools Research Engine
 - **Dynamic Tools Research & Discovery Engine (`ctfsolver/research.py`)**:

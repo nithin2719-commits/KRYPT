@@ -122,6 +122,15 @@ def triage(url: str, workdir: str) -> list[dict]:
     except Exception:
         pass
 
+    # LFI / Path traversal prober
+    try:
+        from ..solvers import web_arsenal
+        lfi_res = web_arsenal.probe_lfi(url)
+        if lfi_res.get("flags") or "No immediate" not in lfi_res.get("output", ""):
+            steps.append(lfi_res)
+    except Exception:
+        pass
+
     # Tech fingerprint
     if have("whatweb"):
         r = run(["whatweb", "--color=never", url], timeout=30)

@@ -32,6 +32,8 @@ LOCAL_REPOS = {
     "evidenceflow": os.path.expanduser("~/Public/EvidenceFlow"),
     "blackarch-toolbox": os.path.expanduser("~/Projects/Blackarch_Toolbox"),
     "agent-team": os.path.expanduser("~/agent-team"),
+    "autorop": os.path.expanduser("~/tools/autorop"),
+    "libc-database": os.path.expanduser("~/tools/libc-database"),
 }
 
 TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {
@@ -40,6 +42,8 @@ TOOL_REGISTRY: Dict[str, Dict[str, Any]] = {
     "ROPgadget": {"category": "pwn", "type": "cli", "bin": "ROPgadget", "desc": "ROP gadget discovery across binary"},
     "ropper": {"category": "pwn", "type": "cli", "bin": "ropper", "desc": "Fast ROP gadget finder"},
     "pwntools": {"category": "pwn", "type": "python", "module": "pwn", "desc": "CTF exploit development framework"},
+    "autorop": {"category": "pwn", "type": "repo", "path": LOCAL_REPOS["autorop"], "desc": "Automated classic CTF pwn challenge solver"},
+    "libc-database": {"category": "pwn", "type": "repo", "path": LOCAL_REPOS["libc-database"], "desc": "libc symbol offset database for remote ret2libc leaks"},
     "pwndbg": {"category": "pwn", "type": "repo", "path": LOCAL_REPOS["pwndbg"], "desc": "GDB exploit development extension"},
     "one_gadget": {"category": "pwn", "type": "cli", "bin": "one_gadget", "desc": "libc execve('/bin/sh') gadget finder"},
     "pwninit": {"category": "pwn", "type": "cli", "bin": "pwninit", "desc": "Automate CTF pwn challenge setup & ld/libc patching"},
