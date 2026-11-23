@@ -158,6 +158,18 @@ def triage(path: str, workdir: str) -> list[dict]:
                           "summary": "RsaCtfTool attack suite",
                           "output": body[:3000], "flags": scan_text(body)})
 
+    # Z3 constraint equation block auto-solve (crackmes, linear/bitwise systems)
+    try:
+        from ..solvers import z3_solve
+        z3_res = z3_solve.scan_and_solve(txt)
+        if z3_res.get("solved"):
+            steps.append({"step": "z3-solve",
+                          "summary": f"Z3 constraint solver ({z3_res.get('constraints_count', 0)} constraints)",
+                          "output": z3_res.get("output", ""),
+                          "flags": z3_res.get("flags", [])})
+    except Exception:
+        pass
+
     steps.append({"step": "next",
                   "summary": "If this is classical/again encoded, try CyberChef-"
                              "style chains; for RSA use ~/tools/RsaCtfTool; for "

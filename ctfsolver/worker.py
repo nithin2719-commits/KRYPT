@@ -155,8 +155,10 @@ class CTFWorker:
         poll_interval: float = 1.0,
         on_event: Optional[Callable[[str, Any], None]] = None,
         workdir: Optional[str] = None,
+        strategy: str = "fifo",
     ):
         self.event = event or "default"
+        self.strategy = strategy or "fifo"
         self.workdir = os.path.abspath(workdir) if workdir else WORKSPACE
         self.queue_file = os.path.join(self.workdir, "worker_queue.json")
         self.stats_file = os.path.join(self.workdir, "worker_stats.json")
@@ -435,6 +437,29 @@ class CTFWorker:
                             f["source"] = "pwn_scaffold"
                             found_flags.append(f)
 
+        # CRYPTO & REV: Z3 Constraint Solver for equation blocks
+        if cat in ("crypto", "rev", "misc", "auto"):
+            text_for_z3 = ""
+            if target and os.path.isfile(target):
+                try:
+                    with open(target, "r", errors="replace") as fh:
+                        text_for_z3 = fh.read(50000)
+                except OSError:
+                    pass
+            elif task.briefing:
+                text_for_z3 = task.briefing
+
+            if text_for_z3:
+                try:
+                    from .solvers import z3_solve
+                    z3_res = z3_solve.scan_and_solve(text_for_z3)
+                    if z3_res.get("solved"):
+                        for f in z3_res.get("flags", []):
+                            f["source"] = "z3_constraint_solver"
+                            found_flags.append(f)
+                except Exception:
+                    pass
+
         # CRYPTO: RSA attacks & Hash cracking
         if cat in ("crypto", "misc", "auto"):
             # Check RSA
@@ -459,14 +484,54 @@ class CTFWorker:
                         f["source"] = "rsa_solver"
                         found_flags.append(f)
 
-        # FORENSICS: trailer carving & metadata
+        # FORENSICS & STEGO: QR codes, LSB planes, deep PCAP, deep audio
         if (cat in ("forensics", "image", "stego", "auto")) and target and os.path.isfile(target):
+            lower_target = target.lower()
+            if lower_target.endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")):
+                try:
+                    from .solvers import qr_visual
+                    qr_res = qr_visual.solve(target, task.workdir)
+                    for f in qr_res.get("flags", []):
+                        f["source"] = "qr_visual_solver"
+                        found_flags.append(f)
+                except Exception:
+                    pass
+            elif lower_target.endswith((".wav", ".mp3", ".ogg", ".flac")):
+                try:
+                    from .solvers import audio_deep
+                    a_res = audio_deep.solve(target, task.workdir)
+                    for f in a_res.get("flags", []):
+                        f["source"] = "audio_deep_solver"
+                        found_flags.append(f)
+                except Exception:
+                    pass
+            elif lower_target.endswith((".pcap", ".pcapng", ".cap")):
+                try:
+                    from .solvers import pcap_deep
+                    pcap_res = pcap_deep.solve(target, task.workdir)
+                    for f in pcap_res.get("flags", []):
+                        f["source"] = "pcap_deep_solver"
+                        found_flags.append(f)
+                except Exception:
+                    pass
+
             if have("exiftool"):
                 ex = tool_run(["exiftool", target])
                 if ex.ok():
                     for f in flagmod.scan_text(ex.stdout):
                         f["source"] = "exiftool_metadata"
                         found_flags.append(f)
+
+        # WEB: SSTI / SQLi automated probes and JWT attacks
+        if (cat in ("web", "url", "auto")) and target and target.startswith(("http://", "https://")):
+            try:
+                from .solvers import jwt_web
+                web_probe = jwt_web.probe_ssti_sqli(target)
+                for f in web_probe.get("flags", []):
+                    f["source"] = "web_vuln_prober"
+                    found_flags.append(f)
+            except Exception:
+                pass
 
         return found_flags
 
@@ -625,10 +690,14 @@ class CTFWorker:
             self._save_state()
 
     def process_next(self) -> Optional[CTFTask]:
-        """Pops and executes the highest-priority queued challenge."""
+        """Pops and executes the highest-priority queued challenge according to strategy."""
         with self._lock:
             if not self._queue:
                 return None
+            if self.strategy == "easy-first":
+                self._queue.sort(key=lambda t: (t.points if t.points > 0 else 999999, t.created_at))
+            elif self.strategy == "high-points":
+                self._queue.sort(key=lambda t: (-t.points, t.created_at))
             task = self._queue[0]
 
         self.process_task(task)

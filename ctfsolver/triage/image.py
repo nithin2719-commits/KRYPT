@@ -11,6 +11,15 @@ def triage(path: str, workdir: str) -> list[dict]:
     steps: list[dict] = []
     lower = path.lower()
 
+    # QR code, Barcode, and Bit-Plane LSB analysis
+    try:
+        from ..solvers import qr_visual
+        qr_step = qr_visual.solve(path, workdir)
+        if qr_step.get("flags") or "No visual" not in qr_step.get("output", ""):
+            steps.append(qr_step)
+    except Exception:
+        pass
+
     # zsteg for PNG/BMP LSB channels
     if have("zsteg") and lower.endswith((".png", ".bmp")):
         r = run(["zsteg", "-a", path], timeout=90)

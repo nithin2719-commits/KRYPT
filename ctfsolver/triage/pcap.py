@@ -55,6 +55,15 @@ def triage(path: str, workdir: str) -> list[dict]:
                           "summary": f"carved {len(exported)} file(s) transferred over HTTP",
                           "output": "\n".join(os.path.basename(f) for f in exported[:30]),
                           "flags": [], "artifacts": exported})
+
+        # Deep PCAP analysis (ICMP tunnel, cleartext credentials, and TCP stream follows)
+        try:
+            from ..solvers import pcap_deep
+            deep_pcap = pcap_deep.solve(path, workdir)
+            if deep_pcap.get("flags") or "No hidden" not in deep_pcap.get("output", ""):
+                steps.append(deep_pcap)
+        except Exception:
+            pass
     else:
         # Fall back to strings over the raw capture
         r = run(["strings", "-n", "6", path], timeout=60)

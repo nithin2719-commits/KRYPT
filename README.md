@@ -92,15 +92,15 @@ flowchart LR
 
    | Category | What runs |
    |---|---|
-   | binary (pwn / rev) | checksec, readelf, nm/objdump, radare2, ROPgadget, angr, ret2win scaffold |
-   | image (stego) | zsteg, steghide, **stegseek + rockyou**, **EOF trailer overlay carving** |
+   | binary (pwn / rev) | checksec, readelf, nm/objdump, radare2, ROPgadget, angr, **ret2win & ret2libc ROP scaffold** |
+   | image (stego) | **QR / Barcode decoder**, **LSB bitplane extraction**, zsteg, steghide, stegseek + rockyou, EOF trailer overlay carving |
    | archive | 7z/unzip, detects `Encrypted=+` → **zip2john + rockyou** |
-   | pcap | capinfos, tshark, **DNS exfiltration sweep**, **HTTP object carving**, **USB HID keystroke decoder** |
+   | pcap | capinfos, tshark, **DNS exfiltration**, **HTTP objects**, **ICMP data tunnels**, **FTP/HTTP/SMTP credentials**, **TCP stream follow**, USB HID keystroke decoder |
    | pdf | pdftotext, `qpdf --qdf` stream recovery, pdfdetach / pdfimages |
-   | text / data (crypto) | **magic BFS decoder**, Caesar brute, **Affine brute**, **Vigenère crib recovery**, **Baconian**, Base62/Braille, single- and repeating-key XOR, RSA solver, **Brainfuck / Ook!**, hashid, auto john |
+   | text / data (crypto) | **magic BFS decoder**, Caesar brute, Affine brute, Vigenère crib recovery, Baconian, Base62/Braille, XOR, RSA solver, Brainfuck / Ook!, **Z3 symbolic constraint solver**, hashid, auto john |
    | osint | pulls usernames / emails / domains / phones from the briefing and runs sherlock, maigret, holehe, theHarvester, subfinder, phoneinfoga |
-   | audio | metadata, strings, steghide on WAV, spectrogram render |
-   | url (web) | headers/body, common paths, forms, **JWT auto-unpack & claim sweep**, whatweb, optional arjun |
+   | audio | metadata, strings, steghide on WAV, spectrogram render, **DTMF touch-tone demodulator**, **audio LSB extraction** |
+   | url (web) | headers/body, common paths, forms, **JWT attack suite (alg:none & secret crack)**, **SSTI/SQLi automated prober**, whatweb, optional arjun |
    | host:port | banner grab plus benign auto-probes |
 
 4. **Recursive hunt.** Carved and extracted members are re-run through the full pipeline.

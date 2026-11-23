@@ -42,6 +42,17 @@ def triage(path: str, workdir: str) -> list[dict]:
             steps.append({"step": "steghide", "summary": "steghide payload extracted",
                           "output": "", "flags": [], "artifacts": [out]})
 
+    # Deep audio analysis (DTMF touch-tone sequence & Audio LSB extraction)
+    wav_to_test = path if lower.endswith(".wav") else os.path.join(workdir, "_audio.wav")
+    if os.path.exists(wav_to_test):
+        try:
+            from ..solvers import audio_deep
+            deep_step = audio_deep.solve(wav_to_test, workdir)
+            if deep_step.get("flags") or "No DTMF" not in deep_step.get("output", ""):
+                steps.append(deep_step)
+        except Exception:
+            pass
+
     steps.append({"step": "next",
                   "summary": "Open the spectrogram. Also check for DTMF/Morse "
                              "tones (multimon-ng), slow-scan TV (QSSTV), or LSB "

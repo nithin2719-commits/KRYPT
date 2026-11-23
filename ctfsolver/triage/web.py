@@ -100,29 +100,27 @@ def triage(url: str, workdir: str) -> list[dict]:
         _curl(url, ["-D", "-", "-o", "/dev/null"]).stdout))
     if jwts:
         jwt_details, jwt_flags = [], []
-        import base64
-        import json
-        for tok in list(jwts)[:5]:
-            parts = tok.split(".")
-            decoded_parts = []
-            for idx, part in enumerate(parts[:2]):
-                label = "Header" if idx == 0 else "Payload"
-                try:
-                    pad = "=" * (-len(part) % 4)
-                    raw_dec = base64.urlsafe_b64decode(part + pad).decode("utf-8", "replace")
-                    try:
-                        raw_dec = json.dumps(json.loads(raw_dec), indent=2)
-                    except Exception:
-                        pass
-                    decoded_parts.append(f"[{label}]\n{raw_dec}")
-                    jwt_flags.extend(scan_text(raw_dec))
-                except Exception:
-                    pass
-            jwt_details.append(f"TOKEN: {tok[:32]}...\n" + "\n".join(decoded_parts))
-        steps.append({"step": "jwt",
-                      "summary": f"{len(jwts)} JWT(s) found and decoded (alg:none / secrets check)",
-                      "output": "\n\n".join(jwt_details), "flags": jwt_flags})
+        try:
+            from ..solvers import jwt_web
+            for tok in list(jwts)[:5]:
+                attack_res = jwt_web.attack_jwt(tok)
+                jwt_details.append(f"TOKEN: {tok[:32]}...\n" + attack_res.get("output", ""))
+                jwt_flags.extend(attack_res.get("flags", []))
+        except Exception:
+            pass
+        if jwt_details:
+            steps.append({"step": "jwt-exploit",
+                          "summary": f"{len(jwts)} JWT(s) attacked (secret crack & alg:none forge)",
+                          "output": "\n\n".join(jwt_details), "flags": jwt_flags})
 
+    # Automated non-destructive SSTI and SQLi probe on URL parameters
+    try:
+        from ..solvers import jwt_web
+        probe_res = jwt_web.probe_ssti_sqli(url)
+        if probe_res.get("flags") or probe_res.get("output"):
+            steps.append(probe_res)
+    except Exception:
+        pass
 
     # Tech fingerprint
     if have("whatweb"):

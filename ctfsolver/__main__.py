@@ -213,6 +213,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="challenge category for queueing (pwn, rev, web, crypto, forensics, osint, misc)")
     ap.add_argument("--points", type=int, default=0,
                     help="challenge points for queueing")
+    ap.add_argument("--strategy", choices=["fifo", "easy-first", "high-points"], default="fifo",
+                    help="worker queue priority strategy (fifo, easy-first [lowest points first], high-points [highest points first])")
     args = ap.parse_args(argv)
 
     # Subcommand normalization
@@ -332,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
             w.flag_format = args.flag_format
         if args.interval:
             w.poll_interval = args.interval
+        if args.strategy:
+            w.strategy = args.strategy
 
         if args.status:
             st = w.status()
