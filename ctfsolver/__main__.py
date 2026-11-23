@@ -175,8 +175,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--doctor", action="store_true",
                     help="check the CTF environment (tools, wordlist, engines) "
                          "and print a readiness report")
-    ap.add_argument("--agent", choices=["claude", "agy", "all", "api"],
-                    help="escalate to autonomous AI/MCP agent to capture flag (claude, agy, all, api)")
+    ap.add_argument("--agent", choices=["claude", "agy", "all", "api", "pwn", "rev", "crypto", "web", "forensics", "osint", "swarm"],
+                    help="escalate to autonomous AI/MCP agent or specialized domain swarm (pwn, rev, crypto, web, forensics, osint, swarm, all)")
     ap.add_argument("--briefing", default="",
                     help="challenge description / context to guide the hunt")
     ap.add_argument("--flag-format", default="",
@@ -358,8 +358,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.agent == "agy":
             os.environ["KRYPT_AGY_YOLO"] = "1"
 
-        print(f"[*] Escalating to autonomous agent ({args.agent})...", file=sys.stderr)
-        if args.agent == "all":
+        print(f"[*] Escalating to autonomous agent / specialist ({args.agent})...", file=sys.stderr)
+        if args.agent == "swarm":
+            from .swarm import get_swarm
+            res = get_swarm(event=args.event or "", flag_format=args.flag_format).solve(
+                target=target, briefing=briefing, category=args.category, flag_format=args.flag_format
+            )
+        elif args.agent in ("pwn", "rev", "crypto", "web", "forensics", "osint"):
+            from .specialists import get_specialist
+            spec = get_specialist(args.agent)
+            res = spec.solve(
+                target=target, briefing=briefing, evidence="", workdir="", provider="all", flag_format=args.flag_format
+            )
+        elif args.agent == "all":
             res = gui_server.escalate(target, description=briefing, event=args.event or "", flag_format=args.flag_format)
         else:
             res = gui_server.deep(target, description=briefing, provider=args.agent, event=args.event or "", flag_format=args.flag_format)

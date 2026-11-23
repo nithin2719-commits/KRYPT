@@ -146,7 +146,8 @@ bind = ALT, T, exec, ~/ctf-solver/gui/launch.sh
 ./ctf ./capture.pcap             # network
 ./ctf ./cipher.txt               # crypto / encodings
 ./ctf https://target/chal        # web
-./ctf 10.10.10.5:1337            # remote service
+./ctf ./chal --agent swarm       # multi-agent swarm orchestrator with shared blackboard
+./ctf ./chal --agent pwn         # domain specialist (pwn, rev, crypto, web, forensics, osint)
 ./ctf ./chal --agent agy         # escalate to autonomous AI + 150 MCP security tools
 ./ctf ./chal --agent all         # parallel race across free triage, GPU, and MCP engines
 ./ctf --briefing "ciphertext"   # fileless instant crypto / text / url solve
@@ -219,6 +220,7 @@ Paste the challenge prompt and hints into the briefing box, and the flag wrapper
 | Engine | What it does |
 |---|---|
 | **ALL · AUTO** *(default)* | Free engines gate the paid ones, then the paid ones **race in parallel**. Deterministic triage (instant) and the local GPU model (offline) run first and short-circuit on a flag — easy challenges are solved for free and never touch an API. If both miss, Claude MCP, Claude API and (under `KRYPT_AGY_YOLO`) agy are launched **concurrently** and the first real flag wins. |
+| **SWARM · MULTI-AGENT** | Orchestrates specialized domain agents (Pwn, Rev, Crypto, Web, Forensics, Osint) with a shared blackboard (`SwarmBlackboard`) managing cross-domain artifact, clue, and hypothesis handoffs. |
 | **TRIAGE** | Deterministic pipeline only. Instant, offline, never refuses. |
 | **LOCAL · &lt;model&gt;** | Adds a local Ollama hypothesis on your GPU (`ai.py`). Picks an installed security model automatically, falls back to `qwen2.5-coder:7b`; override with `CTF_OLLAMA_MODEL`. |
 | **CLAUDE · MCP** | Runs `claude -p` against the challenge with a scoped, read-only MCP allowlist (ghidra, hexstrike-ai). No skip-permissions. |
@@ -238,24 +240,29 @@ under `vault/`.
 ```
 ctf                    CLI launcher
 ctfsolver/
-  __main__.py          CLI, orchestration, recursive hunt, --watch, --doctor
+  __main__.py          CLI, orchestration, recursive hunt, --watch, --doctor, --worker
   detect.py            input classification
   categories.py        domain → tool/skill arsenals
   flags.py             flag sweep — plaintext + base64/hex + recursive magic decode (strict)
+  scoreboard.py        CTFd / rCTF scoreboard client & automatic submission
+  worker.py            Active CTF Worker daemon, task queue & terminal HUD
+  research.py          Dynamic tools discovery engine & catalog (repos, venv, binaries)
+  specialists.py       Domain specialist agents (pwn, rev, crypto, web, forensics, osint)
+  swarm.py             Multi-agent swarm coordinator & shared blackboard
   watch.py             real-time folder watcher / auto-hunt engine
   doctor.py            CTF-environment readiness report
   decoders.py          magic BFS decoder + XOR brute force
   crack.py             rockyou auto-crack (zip / steghide / hash)
   solvers/             angr, pwn scaffold, RSA, brainfuck, text-stego, USB HID
   triage/              per-category modules (binary, image, audio, archive, pcap, pdf, web, osint, …)
-  agents.py            claude / agy deep-hunt runners
+  agents.py            claude / agy deep-hunt runners & CTF copilot prompt
   ai.py · ai_api.py    local Ollama assist · Anthropic API engine (vision)
   vault.py · export.py events, writeups, Markdown/PDF export
 gui/
   server.py            stdlib backend on 127.0.0.1:8777
-  index.html           the KRYPT interface
+  index.html           the KRYPT interface with Active Worker HUD & Swarm
   launch.sh            starts the backend and opens a fullscreen app window
-tests/                 decoder, crack, flag, vault, category and solver tests
+tests/                 decoder, crack, flag, vault, category, scoreboard, worker, and swarm tests
 ```
 
 ## Tests

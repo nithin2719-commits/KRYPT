@@ -629,6 +629,12 @@ class Handler(BaseHTTPRequestHandler):
                 cat = data.get("category", "auto")
                 ev = data.get("event", "")
                 fmt = data.get("flag_format", "")
+                if provider == "swarm":
+                    from ctfsolver.swarm import get_swarm
+                    return self._send(200, get_swarm(ev, fmt).solve(target, desc, cat, fmt))
+                if provider in ("pwn", "rev", "crypto", "web", "forensics", "osint"):
+                    from ctfsolver.specialists import get_specialist
+                    return self._send(200, get_specialist(provider).solve(target, desc, "", "", "all", fmt))
                 if provider == "all":
                     return self._send(200, escalate(target, desc, cat, ev, fmt))
                 return self._send(200, deep(target, desc, provider, cat, ev, fmt))

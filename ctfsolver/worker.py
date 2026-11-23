@@ -479,7 +479,25 @@ class CTFWorker:
         if engine == "none":
             return []
 
-        if engine == "all":
+        if engine == "swarm":
+            from .swarm import get_swarm
+            res = get_swarm(event=task.event, flag_format=task.flag_format).solve(
+                target=task.target,
+                briefing=task.briefing,
+                category=task.category,
+                flag_format=task.flag_format,
+            )
+        elif engine in ("pwn", "rev", "crypto", "web", "forensics", "osint"):
+            from .specialists import get_specialist
+            res = get_specialist(engine).solve(
+                target=task.target,
+                briefing=task.briefing,
+                evidence=task.report_md,
+                workdir=task.workdir,
+                provider="all",
+                flag_format=task.flag_format,
+            )
+        elif engine == "all":
             res = gui_server.escalate(
                 target=task.target,
                 description=task.briefing,

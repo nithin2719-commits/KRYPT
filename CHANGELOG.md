@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.1 — Multi-Agent Swarm Orchestrator & Dynamic Tools Research Engine
+- **Dynamic Tools Research & Discovery Engine (`ctfsolver/research.py`)**:
+  - Dynamically catalogs installed CTF repositories across the system (`~/tools/hexstrike-ai`, `pwndbg`, `RsaCtfTool`, `GHunt`, `strix`, `EvidenceFlow`, `agent-team`, etc.).
+  - Inspects Python virtualenv modules (`pwntools`, `angr`, `z3`, `pycryptodome`, `volatility3`, `gmpy2`, `scapy`), system binaries, and wordlists (`rockyou.txt`).
+  - Automatically recommends prioritized category tool pipelines and dynamic tool execution plans based on challenge evidence.
+- **Specialist Domain Agents (`ctfsolver/specialists.py`)**:
+  - Purpose-built specialist agents: `PwnSpecialist`, `RevSpecialist`, `CryptoSpecialist`, `WebSpecialist`, `ForensicsSpecialist`, and `OsintSpecialist`.
+  - Category-tuned system prompts, tool allowlists (Ghidra MCP, HexStrike AI MCP, custom scripts), and automated execution bindings.
+- **Multi-Agent Swarm Coordinator (`ctfsolver/swarm.py`)**:
+  - `SwarmCoordinator` and `SwarmBlackboard` facilitating cross-agent artifact and clue handoffs (e.g., Forensics carves encrypted container -> Crypto cracks with rockyou -> Rev decompiles payload -> Pwn constructs exploit).
+  - CLI support for `--agent swarm` as well as direct specialist escalation (`--agent pwn`, `--agent rev`, `--agent crypto`, `--agent web`, `--agent forensics`, `--agent osint`).
+- **Web GUI Swarm Mode**:
+  - Added `SWARM · MULTI-AGENT` engine button to `gui/index.html`.
+  - Integrated swarm coordinator and specialist dispatch into `/api/deep` endpoint in `gui/server.py`.
+- **Test Suite Coverage**:
+  - Added `tests/test_research.py` covering repository discovery, pipeline recommendations, specialist configurations, and blackboard state progression (91 unit tests passing).
+
 ## v2.0 — Active CTF Worker & Scoreboard Integration
 - **Active Autonomous CTF Worker Engine (`ctfsolver/worker.py`)**:
   - Continuous competition worker daemon (`./ctf worker`) that automates the complete CTF lifecycle: challenge ingestion, multi-tier solving, candidate verification, scoreboard submission, and Vault writeup generation.
