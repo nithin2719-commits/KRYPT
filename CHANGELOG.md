@@ -41,10 +41,23 @@
 - **GitHub Tool Arsenal Integration (`ctfsolver/research.py`)**:
   - Installed and cataloged `autorop` (`~/tools/autorop`) for automated ret2libc / ret2shellcode pwn pipelines.
   - Installed and cataloged `libc-database` (`~/tools/libc-database`) for remote libc symbol offset lookups.
+- **Volatility 3 Memory Forensics Solver (`ctfsolver/solvers/volatility_solve.py`)**:
+  - Automatically identifies memory captures (`.raw`, `.dmp`, `.vmem`, `.lime`, `.mem`).
+  - Executes prioritized Volatility 3 plugins (`windows.cmdline`, `windows.envars`, `windows.pslist`, `linux.bash`) and sweeps memory strings for flag patterns.
+  - Integrated into generic triage (`ctfsolver/triage/generic.py`) and worker Tier 2 pipeline.
+- **Anti-Debug Bypass & Binary Patching (`ctfsolver/solvers/bin_patch.py`)**:
+  - Automatically patches `ptrace(PTRACE_TRACEME)`, `alarm()`, and `sleep()` PLT entries in ELF binaries with `xor eax, eax; ret` (31 c0 c3) to neutralize debugger-detection and timeouts.
+  - Integrated into binary triage (`ctfsolver/triage/binary.py`).
+- **Document & PDF Deep Forensics (`ctfsolver/solvers/doc_carve.py`)**:
+  - Extracts compressed FlateDecode streams (`qpdf --qdf`), embedded attachments (`pdfdetach`), and raw metadata.
+  - Sweeps Office OpenXML documents (`.docx`, `.pptx`, `.xlsx`) for hidden comments and invisible XML tags.
+  - Integrated into PDF triage (`ctfsolver/triage/pdf.py`) and worker Tier 2 pipeline.
+- **Competition Webhook Alerting (`ctfsolver/worker.py`)**:
+  - Automatically dispatches instant flag capture notifications to Discord, Telegram, or Slack webhooks when `CTF_WEBHOOK_URL` is set.
 - **Queue Priority Strategy Controls (`ctfsolver/worker.py`, `ctfsolver/__main__.py`)**:
   - Added `--strategy {fifo, easy-first, high-points}` to allow tactical challenge scheduling during competitions.
 - **Test Suite Expansion**:
-  - Added `tests/test_advanced_solvers.py` (99 unit tests passing with 100% success).
+  - Added `tests/test_advanced_solvers.py` (102 unit tests passing with 100% success).
 
 ## v2.1 — Multi-Agent Swarm Orchestrator & Dynamic Tools Research Engine
 - **Dynamic Tools Research & Discovery Engine (`ctfsolver/research.py`)**:

@@ -84,6 +84,19 @@ def triage(path: str, workdir: str) -> list[dict]:
             steps.append({"step": "auto-ret2win",
                           "summary": "win/overflow analysis + pwntools exploit scaffold",
                           "output": ps.stdout[:3000], "flags": scan_text(ps.stdout)})
+
+        # Anti-debug detection and binary patching (ptrace, alarm, sleep)
+        try:
+            from ..solvers import bin_patch
+            patch_res = bin_patch.patch_anti_debug(path, workdir)
+            if patch_res.get("patched"):
+                steps.append({"step": "anti-debug-patch",
+                              "summary": f"Neutralized {len(patch_res.get('patches', []))} anti-debug/timer check(s)",
+                              "output": patch_res.get("output", ""),
+                              "flags": [],
+                              "artifacts": [patch_res["patched_file"]] if patch_res.get("patched_file") else []})
+        except Exception:
+            pass
     else:
         steps.append({"step": "solvers",
                       "summary": "flag already present in strings — skipped angr/ret2win "

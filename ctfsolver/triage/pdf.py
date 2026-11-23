@@ -96,6 +96,15 @@ def triage(path: str, workdir: str) -> list[dict]:
                           "output": "\n".join(imgs[:40]),
                           "flags": [], "artifacts": imgs})
 
+    # Deep PDF and document stream carving
+    try:
+        from ..solvers import doc_carve
+        dc_res = doc_carve.solve(path, workdir)
+        if dc_res.get("flags") or dc_res.get("artifacts"):
+            steps.append(dc_res)
+    except Exception:
+        pass
+
     steps.append({"step": "next",
                   "summary": "If still nothing: inspect objects with pdf-parser "
                              "(JS, /OpenAction), check for text drawn as vector "

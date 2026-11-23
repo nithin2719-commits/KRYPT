@@ -99,4 +99,15 @@ def triage(path: str, workdir: str) -> list[dict]:
                           "summary": f"carved {len(carved)} embedded file(s)",
                           "output": "\n".join(carved[:40]),
                           "flags": [], "artifacts": carved})
+
+    # 7. Volatility 3 memory dump analysis (if identified as a memory capture)
+    try:
+        from ..solvers import volatility_solve
+        if volatility_solve.is_memory_dump(path):
+            vol_res = volatility_solve.solve(path, workdir)
+            if vol_res.get("flags") or vol_res.get("output"):
+                steps.append(vol_res)
+    except Exception:
+        pass
+
     return steps

@@ -522,6 +522,49 @@ class CTFWorker:
                         f["source"] = "exiftool_metadata"
                         found_flags.append(f)
 
+            # Volatility 3 Memory Forensics
+            try:
+                from .solvers import volatility_solve
+                if volatility_solve.is_memory_dump(target):
+                    vol_res = volatility_solve.solve(target, task.workdir)
+                    for f in vol_res.get("flags", []):
+                        f["source"] = "volatility_memory_solver"
+                        found_flags.append(f)
+            except Exception:
+                pass
+
+            # Deep Document and PDF stream carving
+            try:
+                from .solvers import doc_carve
+                if target.lower().endswith((".pdf", ".docx", ".pptx", ".xlsx")):
+                    dc_res = doc_carve.solve(target, task.workdir)
+                    for f in dc_res.get("flags", []):
+                        f["source"] = "doc_carve_solver"
+                        found_flags.append(f)
+            except Exception:
+                pass
+
+        # CRYPTO: Esoteric & Classical ciphers (DNA, T9, NATO, Polybius, Rail fence)
+        if cat in ("crypto", "misc", "auto"):
+            content_for_eso = ""
+            if target and os.path.isfile(target):
+                try:
+                    with open(target, "r", errors="replace") as fh:
+                        content_for_eso = fh.read(20000)
+                except OSError:
+                    pass
+            elif task.briefing:
+                content_for_eso = task.briefing
+            if content_for_eso:
+                try:
+                    from .solvers import esoteric_ciphers
+                    for eso in esoteric_ciphers.solve(content_for_eso):
+                        for f in eso.get("flags", []):
+                            f["source"] = f"esoteric_cipher_{eso['method']}"
+                            found_flags.append(f)
+                except Exception:
+                    pass
+
         # WEB: SSTI / SQLi automated probes and JWT attacks
         if (cat in ("web", "url", "auto")) and target and target.startswith(("http://", "https://")):
             try:
@@ -529,6 +572,15 @@ class CTFWorker:
                 web_probe = jwt_web.probe_ssti_sqli(target)
                 for f in web_probe.get("flags", []):
                     f["source"] = "web_vuln_prober"
+                    found_flags.append(f)
+            except Exception:
+                pass
+
+            try:
+                from .solvers import web_arsenal
+                lfi_probe = web_arsenal.probe_lfi(target)
+                for f in lfi_probe.get("flags", []):
+                    f["source"] = "lfi_prober"
                     found_flags.append(f)
             except Exception:
                 pass
@@ -661,6 +713,23 @@ class CTFWorker:
                     )
                 except Exception:
                     pass
+
+                # Webhook alert (Discord / Slack / Telegram)
+                webhook_url = os.environ.get("CTF_WEBHOOK_URL", "")
+                if webhook_url:
+                    try:
+                        import urllib.request
+                        msg = {
+                            "content": f"🚩 **[KRYPT] FLAG CAPTURED!**\n> Challenge: `{task.name}` ({task.category})\n> Points: `+{task.points}`\n> Solved by: `{task.solved_by}`\n```\n{top_flag}\n```"
+                        }
+                        req = urllib.request.Request(
+                            webhook_url,
+                            data=json.dumps(msg).encode("utf-8"),
+                            headers={"Content-Type": "application/json", "User-Agent": "KRYPT/2.2"}
+                        )
+                        urllib.request.urlopen(req, timeout=5)
+                    except Exception:
+                        pass
 
                 task.status = "solved"
                 self.solves_count += 1

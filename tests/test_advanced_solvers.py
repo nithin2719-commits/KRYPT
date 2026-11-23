@@ -129,6 +129,33 @@ class TestAdvancedSolvers(unittest.TestCase):
         self.assertRegex(pin, r"^\d{3}-\d{3}-\d{3}$")
         self.assertTrue(len(web_arsenal.PHP_MAGIC_HASHES["md5"]) > 0)
 
+    def test_volatility_memory_detection(self):
+        from ctfsolver.solvers import volatility_solve
+        self.assertTrue(volatility_solve.is_memory_dump("dump.raw"))
+        self.assertTrue(volatility_solve.is_memory_dump("test.vmem"))
+        self.assertFalse(volatility_solve.is_memory_dump("chal.txt"))
+
+    def test_bin_patch_fallback(self):
+        from ctfsolver.solvers import bin_patch
+        # Non-ELF text file should report failure gracefully
+        dummy_f = os.path.join(self.tmp_dir, "test.elf")
+        with open(dummy_f, "w") as fh:
+            fh.write("not an elf")
+        res = bin_patch.patch_anti_debug(dummy_f, self.tmp_dir)
+        self.assertFalse(res.get("patched"))
+
+    def test_doc_carve_office(self):
+        from ctfsolver.solvers import doc_carve
+        import zipfile
+        # Create dummy docx with hidden XML comment
+        docx_path = os.path.join(self.tmp_dir, "test.docx")
+        with zipfile.ZipFile(docx_path, "w") as zf:
+            zf.writestr("word/document.xml", "<xml><!-- flag{xml_office_comment} --></xml>")
+        res = doc_carve.solve(docx_path, self.tmp_dir)
+        self.assertEqual(res.get("step"), "doc-carve-office")
+        flag_strs = [f["flag"] for f in res.get("flags", [])]
+        self.assertIn("flag{xml_office_comment}", flag_strs)
+
 
 if __name__ == "__main__":
     unittest.main()
