@@ -132,6 +132,10 @@ class Scoreboard:
         self.platform = (platform or cfg.get("platform") or "ctfd").lower().strip()
         self.field = (field or cfg.get("field") or "flag").strip()
 
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.url and self.token)
+
     def test_connection(self) -> dict:
         """Verify scoreboard reachability and credentials."""
         if not self.url:

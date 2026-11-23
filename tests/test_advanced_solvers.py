@@ -181,6 +181,24 @@ class TestAdvancedSolvers(unittest.TestCase):
         self.assertEqual(res.get("step"), "sidechannel-crackme")
         self.assertFalse(res.get("flags"))
 
+    def test_god_solver_instant_and_fallback(self):
+        from ctfsolver import god
+        # Test 1: Instant flag in briefing
+        res = god.solve(briefing="Here is your token: flag{god_apex_tier_solve}", event="test-god")
+        self.assertTrue(res.get("solved"))
+        self.assertEqual(res.get("flag"), "flag{god_apex_tier_solve}")
+        self.assertEqual(res.get("engine"), "tier1_magic")
+
+        # Test 2: Target without flag reaches fallback gracefully without crash
+        dummy_f = os.path.join(self.tmp_dir, "empty.txt")
+        with open(dummy_f, "w") as fh:
+            fh.write("just simple text without flags")
+        res2 = god.solve(target=dummy_f, briefing="nothing here", event="test-god", timeout=0)
+        self.assertFalse(res2.get("solved"))
+        self.assertEqual(res2.get("flag"), "")
+        self.assertIn("tier1_magic", res2.get("phases_run", []))
+
 
 if __name__ == "__main__":
     unittest.main()
+

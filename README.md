@@ -146,6 +146,7 @@ bind = ALT, T, exec, ~/ctf-solver/gui/launch.sh
 ./ctf ./capture.pcap             # network
 ./ctf ./cipher.txt               # crypto / encodings
 ./ctf https://target/chal        # web
+./ctf god ./hard_challenge       # APEX MULTI-TIER: parallel Z3, SageMath, deep forensics & swarm
 ./ctf ./chal --agent swarm       # multi-agent swarm orchestrator with shared blackboard
 ./ctf ./chal --agent pwn         # domain specialist (pwn, rev, crypto, web, forensics, osint)
 ./ctf ./chal --agent agy         # escalate to autonomous AI + 150 MCP security tools

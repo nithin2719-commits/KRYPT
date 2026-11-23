@@ -629,6 +629,9 @@ class Handler(BaseHTTPRequestHandler):
                 cat = data.get("category", "auto")
                 ev = data.get("event", "")
                 fmt = data.get("flag_format", "")
+                if provider == "god":
+                    from ctfsolver.god import solve as god_solve
+                    return self._send(200, god_solve(target, desc, cat, fmt, ev or "god-tier"))
                 if provider == "swarm":
                     from ctfsolver.swarm import get_swarm
                     return self._send(200, get_swarm(ev, fmt).solve(target, desc, cat, fmt))

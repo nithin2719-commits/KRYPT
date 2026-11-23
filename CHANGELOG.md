@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.4 — Apex Multi-Tier Autonomous Solver
+- **Apex Multi-Tier Engine (`ctfsolver/god.py`)**:
+  - Orchestrates all four solver tiers concurrently in an apex autonomous pipeline:
+    - Phase 0: Target Acquisition and deep file classification (`ctfsolver.detect`).
+    - Phase 1: Instant Magic BFS decoders and plaintext/base64/hex sweep.
+    - Phase 2: Parallel Deep Domain Solvers (ThreadPoolExecutor across Z3 constraint solving, SageMath RSA/lattices, QR/visual bitplanes, audio DTMF, PCAP ICMP tunnel reassembly, document comment carving, memory forensics, esoteric ciphers, and side-channel timing analysis).
+    - Phase 3: Multi-agent Swarm escalation across cross-domain specialists with shared blackboard.
+    - Phase 4: Strict candidate flag validation, automated scoreboard submission, Vault capture recording, and webhook notifications.
+  - CLI subcommand integration: `./ctf god <target>` and `./ctf <target> --god`.
+  - Web GUI integration: `APEX · MULTI-TIER` engine selector and `/api/deep` provider routing.
+- **Scoreboard & Vault Hardening**:
+  - Added `Scoreboard.is_configured` property for robust credential and reachability verification.
+  - Added time budget and early-exit fallback to prevent hanging in automated workflows.
+- **Test Suite**:
+  - Added comprehensive test coverage for `GodSolver` instant and fallback mechanics (106 passed in 6.93s).
+
 ## v2.3 — Hard CTF Solvers: SageMath Lattices, Side-Channel Crackmes & Payload Forge
 - **SageMath Lattice & Hard RSA Engine (`ctfsolver/solvers/sage_crypto.py`)**:
   - Coppersmith's small root attack for stereotyped messages ($m^e \pmod N$ with known `flag{` prefix) using univariate polynomial root finding over $\mathbb{Z}_N$.

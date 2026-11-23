@@ -215,6 +215,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="challenge points for queueing")
     ap.add_argument("--strategy", choices=["fifo", "easy-first", "high-points"], default="fifo",
                     help="worker queue priority strategy (fifo, easy-first [lowest points first], high-points [highest points first])")
+    ap.add_argument("--god", action="store_true",
+                    help="run autonomous multi-engine solver across all tiers")
     args = ap.parse_args(argv)
 
     # Subcommand normalization
@@ -224,6 +226,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "worker":
         args.worker = True
         args.target = ""
+    elif cmd == "god":
+        args.god = True
+        args.target = raw_targets[1] if len(raw_targets) > 1 else ""
     elif cmd == "sync":
         args.sync = True
         args.target = ""
@@ -254,6 +259,26 @@ def main(argv: list[str] | None = None) -> int:
         return watch.watch_cli(args.watch, deep=args.deep, event=args.event,
                                interval=args.interval,
                                recursive=not args.no_recursive)
+
+    if args.god:
+        from .god import solve as god_solve
+        target = args.target or ""
+        briefing = args.briefing or ""
+        res = god_solve(target=target, briefing=briefing, category=args.category, flag_format=args.flag_format, event=args.event or "god-tier")
+        if args.json:
+            print(json.dumps(res, indent=2, default=str))
+        else:
+            print(f"\n=== Autonomous Multi-Engine Solver Pipeline ===")
+            print(f"Status: {'SOLVED' if res.get('solved') else 'EXHAUSTED'} | Duration: {res.get('duration')}s")
+            if res.get('flag'):
+                print(f"\033[92mFLAG CAPTURED:\033[0m {res['flag']}")
+                print(f"Engine: {res.get('engine')}")
+            if res.get('findings'):
+                print("\nFindings:")
+                for f in res['findings']:
+                    print(f"  • {f}")
+            print(f"Workspace: {res.get('workdir')}\n")
+        return 0 if res.get("solved") else 2
 
     # Scoreboard Direct Submit
     if args.submit:
