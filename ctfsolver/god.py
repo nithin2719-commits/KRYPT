@@ -193,6 +193,13 @@ class GodSolver:
                     return ("doc", doc_carve.solve(target, safe_workdir))
                 solver_tasks.append(executor.submit(run_doc))
 
+            # 6b. ZIP Forensics (pseudo-encryption bypass, small file CRCs, comments)
+            if target and target.lower().endswith((".zip", ".jar", ".apk")):
+                def run_zip():
+                    from .solvers import zip_forensics
+                    return ("zip_forensics", zip_forensics.solve(target, safe_workdir))
+                solver_tasks.append(executor.submit(run_zip))
+
             # 7. Memory Dump Forensics (if memory image)
             if target and os.path.isfile(target):
                 from .solvers import volatility_solve

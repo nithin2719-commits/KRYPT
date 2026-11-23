@@ -27,10 +27,15 @@
     - Trailing overlay data extraction after `IEND`.
     - Palette/PLTE stego analysis (unused palette entries, per-channel bitstreams).
     - LSB replacement detection via Pairs of Values (PoV) $\chi^2$ and channel bitstream extraction.
+- **Pure-Python ZIP Forensics & Anti-Stego Engine (`ctfsolver/solvers/zip_forensics.py`)**:
+  - Detects and clears pseudo-encryption (ZipCenOp fake encryption bit flags) in local and central directory headers.
+  - Brute-forces short plaintexts (1-4 bytes) directly from 32-bit CRC32 checksums without knowing the password.
+  - Extracts End of Central Directory archive comments and per-file comments.
+  - Detects Zip-Slip / path traversal directory anomalies.
 - **Triage & Apex Pipeline Integration**:
-  - Wired into `ctfsolver/god.py`, `ctfsolver/worker.py`, `ctfsolver/triage/crypto.py`, and `ctfsolver/triage/image.py`.
+  - Wired into `ctfsolver/god.py`, `ctfsolver/worker.py`, `ctfsolver/triage/crypto.py`, `ctfsolver/triage/image.py`, and `ctfsolver/triage/archive.py`.
 - **Test Suite**:
-  - Added `tests/test_png_forensics.py` and `tests/test_rsa_xor.py` (total 123 passing unit tests).
+  - Added `tests/test_png_forensics.py`, `tests/test_rsa_xor.py`, and `tests/test_zip_forensics.py` (total 126 passing unit tests).
 
 ## v2.4 — Apex Multi-Tier Autonomous Solver
 - **Apex Multi-Tier Engine (`ctfsolver/god.py`)**:

@@ -38,6 +38,18 @@ def triage(path: str, workdir: str) -> list[dict]:
         steps.append({"step": "7z-list", "summary": "archive contents",
                       "output": listed.stdout[:2000], "flags": []})
 
+    # ZIP Forensics (pseudo-encryption bypass, small file CRC32 brute, archive/file comments)
+    if lower.endswith(".zip"):
+        try:
+            from ..solvers import zip_forensics
+            z_res = zip_forensics.solve(path, workdir)
+            if z_res.get("flags") or z_res.get("artifacts"):
+                steps.append(z_res)
+                if z_res.get("flags"):
+                    return steps
+        except Exception:
+            pass
+
     # Encrypted archive -> go straight to cracking (an empty-password extract
     # would otherwise write 0-byte stubs and masquerade as success).
     if _encrypted(path):
