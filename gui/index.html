@@ -239,6 +239,14 @@
   .resbar{display:flex;gap:9px;margin-bottom:14px;flex-wrap:wrap}
   .act{font-size:11px;color:var(--fg2);border:1px solid var(--line);background:var(--surface);padding:5px 11px;border-radius:7px;cursor:pointer;letter-spacing:.5px;transition:.12s;font-family:var(--mono)}
   .act:hover{border-color:var(--line2);box-shadow:0 0 10px rgba(255,255,255,.12)}
+  .workerbar{display:flex;align-items:center;justify-content:space-between;background:#080809;border:1px solid var(--line);border-radius:10px;padding:9px 16px;margin:8px 0 18px;flex-wrap:wrap;gap:10px}
+  .workerleft{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:12px}
+  .workerright{display:flex;align-items:center;gap:8px}
+  .wkr_title{font-family:var(--display);font-weight:700;letter-spacing:1px;font-size:11px;color:var(--fg)}
+  .wkr_badge{font-size:10px;padding:2px 8px;border-radius:6px;background:#141416;border:1px solid var(--line2);color:var(--dim)}
+  .wkr_badge.running{background:rgba(0,255,150,.1);border-color:#00ff96;color:#00ff96}
+  .wkr_badge.solving{background:rgba(0,200,255,.1);border-color:#00c8ff;color:#00c8ff}
+  .wkr_text{color:var(--dim);font-size:11px}
   .capture{border:1px solid var(--line2);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.01));box-shadow:0 0 30px rgba(255,255,255,.1)}
   .cap-head{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:3px;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:11px;border-bottom:1px solid var(--line2);background:rgba(255,255,255,.03)}
   .cap-head .xh{font-size:18px;animation:spin 5s linear infinite;display:inline-block}
@@ -312,6 +320,20 @@
 
   <div class="sessbar">
     <span class="usagehud" id="usagehud" title="API credit usage — click for all accounts"></span>
+  </div>
+
+  <div class="workerbar" id="workerbar">
+    <div class="workerleft">
+      <span class="wdot" id="wkr_dot"></span>
+      <span class="wkr_title">ACTIVE CTF WORKER</span>
+      <span id="wkr_state" class="wkr_badge">IDLE</span>
+      <span id="wkr_info" class="wkr_text">Solved: 0 (+0 pts) · Queue: 0</span>
+    </div>
+    <div class="workerright">
+      <button class="cat" id="wkr_sync" title="Sync unsolved challenges from CTFd / rCTF scoreboard">SYNC SCOREBOARD</button>
+      <button class="cat" id="wkr_clear" title="Clear worker task queue">CLEAR QUEUE</button>
+      <button class="go" id="wkr_toggle" style="padding:6px 14px;font-size:11px;min-width:auto;">START WORKER</button>
+    </div>
   </div>
 
   <div class="console">
@@ -520,6 +542,71 @@ $("#cats").addEventListener("click",e=>{
   (async()=>{try{const st=await (await fetch("/api/watch/status")).json();
     if(st.running){deep=!!st.deep; deepB.classList.toggle("on",deep);
       setBtn(true); panel.classList.add("show"); startPolling();}}catch(e){}})();
+})();
+
+/* ---- ACTIVE CTF WORKER CONTROLLER ---- */
+(function(){
+  const dot=$("#wkr_dot"), stateEl=$("#wkr_state"), infoEl=$("#wkr_info");
+  const toggleB=$("#wkr_toggle"), syncB=$("#wkr_sync"), clearB=$("#wkr_clear");
+  let running=false;
+
+  async function pollWorker(){
+    try{
+      const st=await (await fetch("/api/worker/status")).json();
+      running=(st.state==="running" || st.state==="solving");
+      dot.classList.toggle("live",running);
+      stateEl.textContent=(st.current_task?("SOLVING: "+st.current_task.name):st.state.toUpperCase());
+      stateEl.className="wkr_badge"+(st.current_task?" solving":(running?" running":""));
+      infoEl.textContent="Solved: "+st.solves_count+" (+"+st.total_points+" pts) · Queue: "+st.queue_length;
+      toggleB.textContent=running?"PAUSE WORKER":"START WORKER";
+      toggleB.className=running?"go busy":"go";
+    }catch(e){}
+  }
+
+  toggleB.onclick=async()=>{
+    toggleB.disabled=true;
+    try{
+      if(running){
+        await fetch("/api/worker/stop",{method:"POST",body:"{}"});
+        toast("Worker paused");
+      }else{
+        const ev=($("#event").value||"").trim();
+        await fetch("/api/worker/start",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({event:ev||"default",auto_submit:true,engine:getEngine()})});
+        toast("Active CTF Worker started");
+      }
+      await pollWorker();
+    }catch(e){toast("Worker command failed");}
+    toggleB.disabled=false;
+  };
+
+  syncB.onclick=async()=>{
+    syncB.disabled=true;
+    toast("Syncing challenges from scoreboard…");
+    try{
+      const ev=($("#event").value||"").trim();
+      const r=await (await fetch("/api/scoreboard/sync",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({event:ev||"default"})})).json();
+      if(r.ok){
+        toast("Synced "+r.enqueued+" challenges into queue!");
+      }else{
+        toast("Scoreboard sync: "+(r.error||"not connected"));
+      }
+      await pollWorker();
+    }catch(e){toast("Scoreboard sync failed");}
+    syncB.disabled=false;
+  };
+
+  clearB.onclick=async()=>{
+    try{
+      await fetch("/api/worker/clear",{method:"POST",body:"{}"});
+      toast("Worker queue cleared");
+      await pollWorker();
+    }catch(e){}
+  };
+
+  setInterval(pollWorker,2000);
+  pollWorker();
 })();
 /* ---- periodic header glitch ---- */
 (function(){const g=$("#brandglitch");if(!g)return;

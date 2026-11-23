@@ -517,6 +517,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, watch_status())
         elif path == "/api/events":
             self._send(200, vault.list_events())
+        elif path == "/api/worker/status":
+            from ctfsolver.worker import get_worker
+            self._send(200, get_worker().status())
+        elif path == "/api/worker/queue":
+            from ctfsolver.worker import get_worker
+            self._send(200, {"ok": True, "queue": get_worker().get_queue(), "completed": get_worker().get_completed()})
+        elif path == "/api/scoreboard/status":
+            from ctfsolver.scoreboard import get_scoreboard_config, get_scoreboard
+            cfg = get_scoreboard_config()
+            conn = get_scoreboard().test_connection() if cfg.get("url") else {"ok": False, "error": "Not configured"}
+            self._send(200, {"config": cfg, "connection": conn})
         elif path == "/api/writeup":
             sid = parse_qs(urlparse(self.path).query).get("id", [""])[0]
             self._send(200, {"id": sid, "writeup": vault.get_writeup(sid)})
@@ -633,6 +644,64 @@ class Handler(BaseHTTPRequestHandler):
                 data = json.loads(self._read_body() or b"{}")
                 ok = vault.delete_event(data.get("event_id", ""))
                 return self._send(200, {"ok": ok})
+            if path == "/api/worker/start":
+                from ctfsolver.worker import get_worker
+                data = json.loads(self._read_body() or b"{}")
+                w = get_worker(data.get("event", "default"))
+                if data.get("inbox"):
+                    w.inbox_dirs = [os.path.abspath(os.path.expanduser(d)) for d in data["inbox"]]
+                if "auto_submit" in data:
+                    w.auto_submit = bool(data["auto_submit"])
+                if data.get("engine"):
+                    w.escalate_engine = data["engine"]
+                w.start()
+                return self._send(200, w.status())
+            if path == "/api/worker/stop":
+                from ctfsolver.worker import get_worker
+                w = get_worker()
+                w.stop()
+                return self._send(200, w.status())
+            if path == "/api/worker/enqueue":
+                from ctfsolver.worker import get_worker
+                data = json.loads(self._read_body() or b"{}")
+                w = get_worker(data.get("event", "default"))
+                t = w.enqueue(
+                    target=data.get("target", ""),
+                    name=data.get("name", ""),
+                    category=data.get("category", "auto"),
+                    briefing=data.get("briefing", ""),
+                    points=int(data.get("points") or 0),
+                    challenge_id=str(data.get("challenge_id") or ""),
+                )
+                return self._send(200, {"ok": True, "task": t.to_dict()})
+            if path == "/api/worker/clear":
+                from ctfsolver.worker import get_worker
+                w = get_worker()
+                w.clear_queue()
+                return self._send(200, {"ok": True})
+            if path == "/api/scoreboard/connect":
+                from ctfsolver.scoreboard import Scoreboard, save_scoreboard_config
+                data = json.loads(self._read_body() or b"{}")
+                platform = data.get("platform", "ctfd")
+                url = data.get("url", "")
+                token = data.get("token", "")
+                sb = Scoreboard(url=url, token=token, platform=platform)
+                conn = sb.test_connection()
+                if conn.get("ok"):
+                    save_scoreboard_config(platform=platform, url=url, token=token, auto_submit=data.get("auto_submit", True))
+                return self._send(200, conn)
+            if path == "/api/scoreboard/sync":
+                from ctfsolver.worker import get_worker
+                data = json.loads(self._read_body() or b"{}")
+                w = get_worker(data.get("event", "default"))
+                res = w.sync_scoreboard(categories=data.get("categories"))
+                return self._send(200, res)
+            if path == "/api/scoreboard/submit":
+                from ctfsolver.scoreboard import get_scoreboard
+                data = json.loads(self._read_body() or b"{}")
+                sb = get_scoreboard()
+                res = sb.submit_flag(flag=data.get("flag", ""), challenge_id=data.get("challenge_id", ""))
+                return self._send(200, res)
             self._send(404, {"error": "not found"})
         except Exception as e:
             self._send(500, {"error": f"{type(e).__name__}: {e}"})

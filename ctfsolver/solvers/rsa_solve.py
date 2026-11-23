@@ -33,6 +33,9 @@ def main():
         print("USAGE: rsa_solve.py <file>")
         return 2
     tool = shutil.which("rsactftool") or shutil.which("RsaCtfTool")
+    local_rsa = os.path.expanduser("~/tools/RsaCtfTool/src/RsaCtfTool/main.py")
+    if not tool and os.path.isfile(local_rsa):
+        tool = local_rsa
     if not tool:
         print("RSACTFTOOL_MISSING")
         return 2
@@ -44,12 +47,14 @@ def main():
         print(f"READ_FAILED {e}")
         return 2
 
+    tool_argv = [sys.executable, tool] if tool.endswith(".py") else [tool]
+
     # PEM public key present? attack it directly.
     if "-----BEGIN" in text and "KEY-----" in text:
         with tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False) as t:
             t.write(text[text.index("-----BEGIN"):])
             pub = t.name
-        cmd = [tool, "--publickey", pub, "--private", "--attack", "all"]
+        cmd = [*tool_argv, "--publickey", pub, "--private", "--attack", "all"]
         r = subprocess.run(cmd, capture_output=True, timeout=280)
         print(r.stdout.decode("latin-1", "replace")[-4000:])
         return 0
@@ -58,7 +63,7 @@ def main():
     if "n" not in v or "e" not in v:
         print("NO_RSA_PARAMS")
         return 1
-    cmd = [tool, "-n", str(v["n"]), "-e", str(v["e"]), "--attack", "all"]
+    cmd = [*tool_argv, "-n", str(v["n"]), "-e", str(v["e"]), "--attack", "all"]
     if "c" in v:
         cmd += ["--uncipher", str(v["c"])]
     try:

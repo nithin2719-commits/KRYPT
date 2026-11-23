@@ -135,6 +135,22 @@ def run() -> int:
                  f"{_C['d']}{'pyghidra-mcp present (rev decompile)' if ghidra else 'pyghidra-mcp not found'}{_C['x']}")
     lines.append("")
 
+    # active worker & scoreboard
+    lines.append(f"{_C['b']}active worker & scoreboard{_C['x']}")
+    try:
+        from ctfsolver.scoreboard import get_scoreboard_config, get_scoreboard
+        from ctfsolver.worker import get_worker
+        sb_cfg = get_scoreboard_config()
+        sb = get_scoreboard()
+        sb_conn = sb.test_connection() if sb_cfg.get("url") else {"ok": False}
+        sb_msg = f"{sb_cfg['platform'].upper()} @ {sb_cfg['url']}" if sb_cfg.get("url") else "not configured (connect via ctf --ctfd <url> --token <tok>)"
+        lines.append(f"  {OK if sb_conn.get('ok') else WARN} scoreboard             {_C['d']}{sb_msg}{_C['x']}")
+        w = get_worker()
+        lines.append(f"  {OK} active worker          {_C['d']}ready (inboxes: {', '.join(w.inbox_dirs)}){_C['x']}")
+    except Exception as e:
+        lines.append(f"  {WARN} worker probe: {e}")
+    lines.append("")
+
 
     # verdict
     total = have + miss

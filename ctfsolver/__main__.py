@@ -155,7 +155,7 @@ def to_markdown(res: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ctf-solver")
     ap.add_argument("target", nargs="?",
-                    help="file path, http(s) URL, or host:port")
+                    help="file path, http(s) URL, host:port, or command ('worker', 'queue', 'submit', 'sync')")
     ap.add_argument("--ai", action="store_true",
                     help="also ask the local Ollama model for a hypothesis")
     ap.add_argument("--json", action="store_true",
@@ -167,9 +167,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --watch, run the full triage pipeline on each "
                          "file (default: instant plaintext+base64/hex sweep)")
     ap.add_argument("--event", default="",
-                    help="with --watch, auto-save captured flags to this Vault event")
+                    help="with --watch or --worker, auto-save captured flags to this Vault event")
     ap.add_argument("--interval", type=float, default=0.8,
-                    help="with --watch, seconds between polls (default 0.8)")
+                    help="with --watch or --worker, seconds between polls")
     ap.add_argument("--no-recursive", action="store_true",
                     help="with --watch, do not descend into subdirectories")
     ap.add_argument("--doctor", action="store_true",
@@ -181,8 +181,55 @@ def main(argv: list[str] | None = None) -> int:
                     help="challenge description / context to guide the hunt")
     ap.add_argument("--flag-format", default="",
                     help="custom flag format (e.g. picoCTF{...})")
+
+    # Active CTF Worker arguments
+    ap.add_argument("--worker", action="store_true",
+                    help="run ACTIVE CTF WORKER: autonomous multi-tier solving loop & queue manager")
+    ap.add_argument("--inbox", nargs="+", metavar="DIR",
+                    help="inbox directories to monitor for challenge drops in worker mode")
+    ap.add_argument("--ctfd", default="",
+                    help="CTFd scoreboard URL (e.g. https://demo.ctfd.io)")
+    ap.add_argument("--token", default="",
+                    help="scoreboard API token")
+    ap.add_argument("--no-submit", action="store_true",
+                    help="disable automatic scoreboard submission in worker mode")
+    ap.add_argument("--once", action="store_true",
+                    help="worker single pass over inbox/queue then exit")
+    ap.add_argument("--status", action="store_true",
+                    help="print active worker queue & performance stats")
+    ap.add_argument("--sync", action="store_true",
+                    help="sync challenges from scoreboard into worker queue")
+    ap.add_argument("--queue-add", default="",
+                    help="enqueue challenge target into worker queue")
+    ap.add_argument("--queue-list", action="store_true",
+                    help="list challenges in worker queue")
+    ap.add_argument("--queue-clear", action="store_true",
+                    help="clear worker challenge queue")
+    ap.add_argument("--submit", default="",
+                    help="submit a flag directly to the configured scoreboard")
+    ap.add_argument("--challenge-id", default="",
+                    help="scoreboard challenge ID for submission")
+    ap.add_argument("--category", default="auto",
+                    help="challenge category for queueing (pwn, rev, web, crypto, forensics, osint, misc)")
+    ap.add_argument("--points", type=int, default=0,
+                    help="challenge points for queueing")
     args = ap.parse_args(argv)
 
+    # Subcommand normalization
+    cmd = (args.target or "").lower().strip()
+    if cmd == "worker":
+        args.worker = True
+        args.target = ""
+    elif cmd == "sync":
+        args.sync = True
+        args.target = ""
+    elif cmd == "queue":
+        args.queue_list = True
+        args.target = ""
+    elif cmd in ("submit", "flag"):
+        if args.briefing and not args.submit:
+            args.submit = args.briefing
+        args.target = ""
 
     if args.doctor:
         from . import doctor
@@ -193,6 +240,106 @@ def main(argv: list[str] | None = None) -> int:
         return watch.watch_cli(args.watch, deep=args.deep, event=args.event,
                                interval=args.interval,
                                recursive=not args.no_recursive)
+
+    # Scoreboard Direct Submit
+    if args.submit:
+        from .scoreboard import get_scoreboard, save_scoreboard_config
+        sb = get_scoreboard()
+        if args.ctfd:
+            sb.url = args.ctfd.rstrip("/")
+        if args.token:
+            sb.token = args.token
+        res = sb.submit_flag(args.submit, challenge_id=args.challenge_id)
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            st = res.get("status")
+            col = "\033[92m" if st == "correct" else "\033[91m"
+            print(f"Scoreboard Verdict: {col}{st.upper()}\033[0m — {res.get('message')}")
+        return 0 if res.get("status") in ("correct", "already_solved") else 1
+
+    # Worker Queue Management
+    if args.queue_clear:
+        from .worker import get_worker
+        w = get_worker(args.event)
+        w.clear_queue()
+        print("[*] Worker challenge queue cleared.")
+        return 0
+
+    if args.queue_list:
+        from .worker import get_worker
+        w = get_worker(args.event)
+        q = w.get_queue()
+        if args.json:
+            print(json.dumps(q, indent=2))
+        else:
+            print(f"\n=== KRYPT Worker Queue ({len(q)} challenges) ===")
+            for i, t in enumerate(q, 1):
+                pts = f" [{t['points']} pts]" if t.get('points') else ""
+                print(f" {i}. [{t['status'].upper()}] {t['name']} ({t['category']}){pts}")
+                if t.get('target'):
+                    print(f"    Target: {t['target']}")
+                if t.get('briefing'):
+                    print(f"    Briefing: {t['briefing'][:80]}...")
+            print()
+        return 0
+
+    if args.queue_add:
+        from .worker import get_worker
+        w = get_worker(args.event)
+        task = w.enqueue(
+            target=args.queue_add,
+            name=os.path.basename(args.queue_add),
+            category=args.category,
+            briefing=args.briefing,
+            points=args.points,
+            challenge_id=args.challenge_id,
+        )
+        print(f"[+] Enqueued task: {task.name} ({task.id})")
+        return 0
+
+    # Scoreboard Sync
+    if args.sync:
+        from .scoreboard import Scoreboard
+        from .worker import get_worker
+        sb = Scoreboard(url=args.ctfd, token=args.token)
+        w = get_worker(args.event)
+        w.scoreboard = sb
+        print(f"[*] Syncing challenges from {sb.url or 'configured scoreboard'}...")
+        res = w.sync_scoreboard()
+        if res.get("ok"):
+            print(f"[✓] Synced! Enqueued {res['enqueued']} new challenges ({res['already_solved']} already solved).")
+            return 0
+        else:
+            print(f"[!] Sync failed: {res.get('error')}", file=sys.stderr)
+            return 1
+
+    # Active Worker Mode
+    if args.worker or args.status:
+        from .scoreboard import Scoreboard
+        from .worker import get_worker, run_cli
+        sb = Scoreboard(url=args.ctfd, token=args.token) if (args.ctfd or args.token) else None
+        w = get_worker(args.event or "default")
+        if sb:
+            w.scoreboard = sb
+        if args.inbox:
+            w.inbox_dirs = [os.path.abspath(os.path.expanduser(d)) for d in args.inbox]
+        if args.no_submit:
+            w.auto_submit = False
+        if args.agent:
+            w.escalate_engine = args.agent
+        if args.flag_format:
+            w.flag_format = args.flag_format
+        if args.interval:
+            w.poll_interval = args.interval
+
+        if args.status:
+            st = w.status()
+            print(json.dumps(st, indent=2) if args.json else
+                  f"Worker State: {st['state'].upper()} | Solved: {st['solves_count']} (+{st['total_points']} pts) | Queue: {st['queue_length']}")
+            return 0
+
+        return run_cli(w, continuous=not args.once)
 
     if args.agent:
         target = args.target or ""

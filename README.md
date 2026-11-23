@@ -150,10 +150,32 @@ bind = ALT, T, exec, ~/ctf-solver/gui/launch.sh
 ./ctf ./chal --agent agy         # escalate to autonomous AI + 150 MCP security tools
 ./ctf ./chal --agent all         # parallel race across free triage, GPU, and MCP engines
 ./ctf --briefing "ciphertext"   # fileless instant crypto / text / url solve
+./ctf worker                     # ACTIVE CTF WORKER: autonomous multi-tier solver loop
+./ctf worker --ctfd <url> --token <tok> # sync challenges, solve, and auto-submit flags
+./ctf queue list                 # view queued challenges and solving status
+./ctf submit "flag{...}" --challenge-id 42 # direct scoreboard flag submission
 ./ctf ./chal --ai                # + local Ollama hypothesis
 ./ctf ./chal --json              # machine-readable report
 ./ctf --watch ~/Downloads        # WATCH: auto-hunt files the moment they land
 ./ctf --doctor                   # check the CTF environment is ready
+```
+
+**ACTIVE CTF WORKER — Autonomous Solving Daemon.** Runs an end-to-end autonomous competition loop:
+monitors drop inboxes, connects to CTFd or rCTF scoreboards to sync unsolved challenges, executes multi-tier
+solving pipelines (Tier 1: Instant Magic Decoders; Tier 2: angr, RSA, hashcat/john, forensics; Tier 3:
+Autonomous MCP AI escalation), strictly validates flag candidates, auto-submits verified flags to the scoreboard,
+and records writeups to the Vault:
+
+```bash
+# Start active worker in foreground with live terminal dashboard
+./ctf worker --inbox ~/ctf-solver/workspace/inbox ~/Downloads --event "Incursion CTF"
+
+# Connect to CTFd scoreboard, download attachments, and auto-submit
+./ctf worker --ctfd https://ctf.example.com --token <api_token> --auto-submit
+
+# Add challenges or briefing tasks directly to the worker queue
+./ctf --queue-add ./crackme.elf --category rev --points 200
+./ctf --queue-add "http://10.10.10.5/api" --category web --briefing "SQLi / Auth bypass"
 ```
 
 **WATCH — auto-hunt on drop.** Point KRYPT at folders and it hunts flags in every new or
@@ -170,7 +192,7 @@ capture panel.
 ```
 
 **`--doctor`.** Prints a readiness report — per-category CLI tools, rockyou, the local model,
-the frontier API key, and the MCP engines (hexstrike-ai, ghidra, claude, agy) — with a
+the frontier API key, the MCP engines (hexstrike-ai, ghidra, claude, agy), the Active CTF Worker, and Scoreboard status — with a
 `PERFECT / STRONG / OK` verdict and exactly what to install or enable.
 
 Pin the event's flag format for precise sweeps:

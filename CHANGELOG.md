@@ -1,5 +1,28 @@
 # Changelog
 
+## v2.0 — Active CTF Worker & Scoreboard Integration
+- **Active Autonomous CTF Worker Engine (`ctfsolver/worker.py`)**:
+  - Continuous competition worker daemon (`./ctf worker`) that automates the complete CTF lifecycle: challenge ingestion, multi-tier solving, candidate verification, scoreboard submission, and Vault writeup generation.
+  - Multi-tier solving pipeline:
+    - **Tier 1 (Instant Magic)**: Recursive BFS multi-codec decoding, file carving, strings extraction.
+    - **Tier 2 (Heuristic Domain Solvers)**: Autonomous symbolic execution (`angr_solve.py`), RSA attack suite (`rsa_solve.py`), rockyou hash cracking (`crack.py`), PCAP DNS/HTTP carving, and ret2win scaffold (`pwn_scaffold.py`).
+    - **Tier 3 (AI Agent Escalation)**: Autonomous agent solver with HexStrike AI and Ghidra MCP pre-approved allowlists, parallel engine racing across free and paid engines.
+  - Priority task queue with disk persistence (`workspace/worker_queue.json`) and live progress event emissions.
+  - Interactive ANSI terminal dashboard with live status, phase indicators, and score progression.
+- **Scoreboard Integration (`ctfsolver/scoreboard.py`)**:
+  - Full API integration for **CTFd**, **rCTF**, and generic scoreboard endpoints.
+  - Scoreboard sync: queries active competitions, filters already solved challenges, downloads challenge file attachments into local workspaces, and populates the worker queue.
+  - Auto-submission: verified flags are automatically submitted to the competition scoreboard with verdict parsing (`correct`, `incorrect`, `already_solved`, `ratelimited`) and points tracking.
+  - Secure credential storage in `~/.config/krypt/config.json` (chmod 600).
+- **Active CTF Worker Persona (`agents.py`)**:
+  - Updated solver prompt to enforce direct CTF copilot protocol: evidence-first reasoning, rapid hypothesis elimination, no generic lectures, and direct automated tool invocation.
+- **Web GUI Active Worker HUD**:
+  - Live Active Worker status widget in `gui/index.html` with real-time status polling, one-click start/pause, scoreboard sync, and queue clearing.
+  - REST API endpoints for worker lifecycle (`/api/worker/*`) and scoreboard operations (`/api/scoreboard/*`).
+- **CLI Subcommands**:
+  - Added `./ctf worker`, `./ctf queue list/add/clear`, `./ctf submit`, and `./ctf sync` commands.
+  - Integrated worker and scoreboard status reporting into `./ctf --doctor`.
+
 ## v1.5
 - **Full MCP Arsenal & Port Migration**:
   - Unlocked **all 150+ HexStrike AI security tools** (Web, PWN, Reverse Engineering, Forensics, Steganography, Cryptography, and Threat Intelligence) and **Ghidra MCP** in the autonomous agent allowlist.
