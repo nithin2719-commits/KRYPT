@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.7 — Symbolic Execution & Deobfuscation Engine
+- **Symbolic Execution & Input Recovery Suite (`ctfsolver/solvers/symbolic.py`)**:
+  - Implements targeted input recovery using `angr` SimulationManagers to explore crackmes and reversing binaries.
+  - Steers state exploration toward designated success markers (`correct`, `flag{`, `access granted`, `success`, etc.) while avoiding failure states (`wrong`, `incorrect`, `denied`, etc.).
+  - Employs step-by-step deadline-aware simulation loops instead of unconstrained `.explore()` calls to strictly honor wall-clock timeouts.
+  - Multi-length iterative search across common flag and password candidate lengths (4, 6, 8, 12, 16, 24, 32).
+  - Robust claripy abstraction supporting both top-level and vendored module imports across angr versions.
+- **Mixed Boolean-Arithmetic (MBA) Deobfuscation**:
+  - Z3-based expression simplification (`simplify_obfuscated_expr`) folding obfuscated bitwise/arithmetic expressions (e.g. `(x ^ C) ^ C -> x`).
+  - Formal expression equivalence checker (`expressions_equivalent`) verifying semantic identity before applying algebraic substitutions.
+- **Static Pre-Check & Binary Triage**:
+  - Fast ELF triage (`static_precheck`) evaluating dynamic imports (`nm -D`) and linker paths.
+  - Distinguishes local crackmes from service/network binaries (rejecting binaries with socket/connect/bind symbols) and statically linked binaries (which incur higher simulation overhead).
+- **Registry Integration**:
+  - Registered via `@register_solver(name="symbolic_crackme", category="rev", priority=60, match_fn=_looks_like_crackme_elf)` with top-level `solve(target, workdir)` interface.
+- **Unit Test Suite (`tests/test_symbolic.py`)**:
+  - Added 9 unit tests compiling synthetic C fixtures on the fly (dynamic XOR crackmes, static crackmes, networked binaries) and validating pre-check heuristics, input recovery, MBA simplification, and equivalence proofs.
+  - Total test suite expanded to 141 passing unit tests.
+
 ## v2.6 — Plugin Solver Registry & Dynamic Discovery API
 - **Dynamic Solver Registry (`ctfsolver/solvers/registry.py`)**:
   - Implemented decorator-based plugin registration (`@register_solver`) with metadata:
