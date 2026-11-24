@@ -847,6 +847,16 @@ def _dedup_flags(flags: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return unique
 
 
+from .registry import register_solver
+
+
+@register_solver(
+    name="png_forensics",
+    category="forensics",
+    priority=72,
+    match_ext=(".png",),
+    description="PNG structural forensics (tEXt chunks, IHDR CRC dimension repair, trailing IEND)",
+)
 def solve(target: str, workdir: str = "") -> dict[str, Any]:
     """Execute comprehensive PNG forensics and stego analysis.
 

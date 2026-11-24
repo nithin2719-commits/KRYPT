@@ -121,110 +121,37 @@ class GodSolver:
         # =====================================================================
         # PHASE 2: ADVANCED DOMAIN & SYMBOLIC SOLVERS (TIER 2 PARALLEL)
         # =====================================================================
-        self._log("TIER2", "Spawning parallel deep domain solvers (Z3, SageMath, QR, Audio, PCAP, Scaffolder)...")
+        self._log("TIER2", "Spawning parallel deep domain solvers via plugin registry...")
         phases_run.append("tier2_advanced")
 
+        # Prepare combined text for text-based solvers
+        text_for_solvers = briefing
+        if target and os.path.isfile(target):
+            try:
+                with open(target, "r", errors="replace") as fh:
+                    text_for_solvers += "\n" + fh.read(40000)
+            except OSError:
+                pass
+
+        from .solvers.registry import SolverContext, get_matching_solvers
+
+        ctx = SolverContext(
+            target=target,
+            briefing=briefing,
+            combined_text=text_for_solvers,
+            category=resolved_category,
+            workdir=safe_workdir,
+            file_info=target_info,
+        )
+
+        matched_solvers = get_matching_solvers(ctx)
+        self._log("TIER2", f"Matched {len(matched_solvers)} plugin solver(s): {', '.join(s.name for s in matched_solvers)}")
+
         solver_tasks = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-            # 1. Z3 Constraint Solver
-            text_for_z3 = briefing
-            if target and os.path.isfile(target):
-                try:
-                    with open(target, "r", errors="replace") as fh:
-                        text_for_z3 += "\n" + fh.read(40000)
-                except OSError:
-                    pass
-            if text_for_z3:
-                def run_z3():
-                    from .solvers import z3_solve
-                    return ("z3", z3_solve.scan_and_solve(text_for_z3))
-                solver_tasks.append(executor.submit(run_z3))
-
-            # 2. RSA Pure-Python & SageMath Lattice Solver
-            if text_for_z3 and ("BEGIN" in text_for_z3 or any(k in text_for_z3.lower() for k in ("n =", "e =", "c =", "n:", "e:", "c:"))):
-                def run_rsa():
-                    from .solvers import rsa_attacks
-                    return ("rsa_attacks", rsa_attacks.solve(target or text_for_z3, safe_workdir))
-                solver_tasks.append(executor.submit(run_rsa))
-
-                def run_sage():
-                    from .solvers import sage_crypto
-                    return ("sage", sage_crypto.parse_and_attack(text_for_z3))
-                solver_tasks.append(executor.submit(run_sage))
-
-            # 2b. Pure-Python XOR Cryptanalysis Suite
-            if target or text_for_z3:
-                def run_xor():
-                    from .solvers import xor_solver
-                    return ("xor_solver", xor_solver.solve(target or text_for_z3, safe_workdir))
-                solver_tasks.append(executor.submit(run_xor))
-
-            # 3. Visual & QR Stego (if image)
-            if target and target.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")):
-                def run_qr():
-                    from .solvers import qr_visual
-                    return ("qr", qr_visual.solve(target, safe_workdir))
-                solver_tasks.append(executor.submit(run_qr))
-
-                if target.lower().endswith(".png"):
-                    def run_png():
-                        from .solvers import png_forensics
-                        return ("png_forensics", png_forensics.solve(target, safe_workdir))
-                    solver_tasks.append(executor.submit(run_png))
-
-            # 4. Audio Deep & DTMF (if audio)
-            if target and target.lower().endswith((".wav", ".mp3", ".ogg", ".flac")):
-                def run_audio():
-                    from .solvers import audio_deep
-                    return ("audio", audio_deep.solve(target, safe_workdir))
-                solver_tasks.append(executor.submit(run_audio))
-
-            # 5. PCAP Deep & ICMP tunnels (if pcap)
-            if target and target.lower().endswith((".pcap", ".pcapng", ".cap")):
-                def run_pcap():
-                    from .solvers import pcap_deep
-                    return ("pcap", pcap_deep.solve(target, safe_workdir))
-                solver_tasks.append(executor.submit(run_pcap))
-
-            # 6. Document & PDF Stream Carving (if PDF / Office document)
-            if target and target.lower().endswith((".pdf", ".docx", ".xlsx", ".pptx", ".odt", ".ods")):
-                def run_doc():
-                    from .solvers import doc_carve
-                    return ("doc", doc_carve.solve(target, safe_workdir))
-                solver_tasks.append(executor.submit(run_doc))
-
-            # 6b. ZIP Forensics (pseudo-encryption bypass, small file CRCs, comments)
-            if target and target.lower().endswith((".zip", ".jar", ".apk")):
-                def run_zip():
-                    from .solvers import zip_forensics
-                    return ("zip_forensics", zip_forensics.solve(target, safe_workdir))
-                solver_tasks.append(executor.submit(run_zip))
-
-            # 7. Memory Dump Forensics (if memory image)
-            if target and os.path.isfile(target):
-                from .solvers import volatility_solve
-                if volatility_solve.is_memory_dump(target):
-                    def run_vol():
-                        return ("volatility", volatility_solve.run_volatility_plugins(target, safe_workdir))
-                    solver_tasks.append(executor.submit(run_vol))
-
-            # 8. Esoteric Ciphers (DNA, T9, NATO, Polybius, Rail Fence)
-            if text_for_z3:
-                def run_esoteric():
-                    from .solvers import esoteric_ciphers
-                    res = esoteric_ciphers.solve(text_for_z3)
-                    e_flags = []
-                    for r in res:
-                        e_flags.extend(r.get("flags", []))
-                    return ("esoteric", {"flags": e_flags})
-                solver_tasks.append(executor.submit(run_esoteric))
-
-            # 9. Side-channel crackme analysis (if binary)
-            if target and os.path.isfile(target) and os.access(target, os.X_OK):
-                def run_sidechannel():
-                    from .solvers import sidechannel_solve
-                    return ("sidechannel", sidechannel_solve.solve(target, safe_workdir))
-                solver_tasks.append(executor.submit(run_sidechannel))
+        max_workers = min(8, max(2, len(matched_solvers))) if matched_solvers else 2
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for s in matched_solvers:
+                solver_tasks.append(executor.submit(lambda s=s: (s.name, s.fn(ctx))))
 
             # Gather results
             for future in concurrent.futures.as_completed(solver_tasks, timeout=90):

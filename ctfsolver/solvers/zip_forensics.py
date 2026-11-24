@@ -230,6 +230,16 @@ def fix_pseudo_encryption(data: bytes) -> bytes:
     return bytes(mod)
 
 
+from .registry import register_solver
+
+
+@register_solver(
+    name="zip_forensics",
+    category="forensics",
+    priority=68,
+    match_ext=(".zip", ".jar", ".apk"),
+    description="ZIP forensics (pseudo-encryption bypass, small file CRCs, comments)",
+)
 def solve(target: str, workdir: str = "") -> dict[str, Any]:
     """Analyze and solve ZIP archive challenges (pseudo-encryption, small file CRCs, comments)."""
     flags: list[dict[str, Any]] = []

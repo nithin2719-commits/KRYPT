@@ -384,6 +384,27 @@ def detect_xor_encrypted(data: bytes) -> bool:
     return entropy >= min_entropy
 
 
+from .registry import register_solver
+
+
+def match_xor(ctx) -> bool:
+    if ctx.category == "crypto":
+        return True
+    if ctx.combined_text:
+        return True
+    if ctx.target:
+        lower = ctx.target.lower()
+        return lower.endswith((".xor", ".bin", ".dat", ".txt", ".enc", ".raw", ".cipher")) or "." not in os.path.basename(ctx.target)
+    return False
+
+
+@register_solver(
+    name="xor_solver",
+    category="crypto",
+    priority=75,
+    match_fn=match_xor,
+    description="Pure-Python XOR cryptanalysis (single-byte, repeating-key Kasiski, many-time pad)",
+)
 def solve(target: str, workdir: str = "") -> dict[str, Any]:
     """Read file or input data, detect if XOR encrypted, try single-byte then
     repeating-key, scan all results for flags.

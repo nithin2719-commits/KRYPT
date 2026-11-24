@@ -1,6 +1,24 @@
 # Changelog
 
-## v2.5 — Pure-Python RSA Attacks, XOR Cryptanalysis & Deep PNG Forensics
+## v2.6 — Plugin Solver Registry & Dynamic Discovery API
+- **Dynamic Solver Registry (`ctfsolver/solvers/registry.py`)**:
+  - Implemented decorator-based plugin registration (`@register_solver`) with metadata:
+    - Unique solver name, category (`crypto`, `forensics`, `pwn`, `web`, `rev`, `misc`), priority score (higher runs first), optional file extension match patterns (`match_ext`), custom context match callable (`match_fn`), and solver descriptions.
+    - `SolverContext` model encapsulating `target`, `text`, `category`, `hints`, `workdir`, and combined challenge text.
+    - Automatic signature adapter supporting `fn(ctx)`, `fn(target, workdir)`, and `fn(text)` to seamlessly integrate existing legacy solver functions.
+  - Auto-discovery mechanism (`auto_discover()`) dynamically scanning and importing all solver modules under `ctfsolver/solvers/`.
+  - Built-in fallback registration (`register_builtin_solvers()`) guaranteeing core solvers (`z3`, `rsa_attacks`, `sage`, `xor_solver`, `qr`, `png_forensics`, `audio`, `pcap`, `doc`, `zip_forensics`, `volatility`, `esoteric`, `sidechannel`) remain registered even if dynamic import fails or modules are shadowed.
+- **Apex Engine Decoupling (`ctfsolver/god.py`)**:
+  - Refactored `GodSolver._run_deep_solvers()` (Phase 2) to eliminate hardcoded solver invocations.
+  - Solvers are now resolved dynamically using `get_matching_solvers(ctx)`, sorted by priority, and executed concurrently via `ThreadPoolExecutor`.
+- **Decorator Integration on Solvers**:
+  - Registered `zip_forensics.solve` (`forensics`, priority 68, `.zip`, `.jar`, `.apk`).
+  - Registered `png_forensics.solve` (`forensics`, priority 72, `.png`).
+  - Registered `rsa_attacks.solve` (`crypto`, priority 85, `.pem`, `.key`, `.rsa`, `.txt`, and crypto keywords).
+  - Registered `xor_solver.solve` (`crypto`, priority 75, `.xor`, `.bin`, `.dat`, `.txt`, `.enc`, etc.).
+- **Unit Test Suite (`tests/test_registry.py`)**:
+  - Added unit test suite covering registration, decorator adapters, priority sorting, auto-discovery, and dynamic execution inside `GodSolver`. All 132 tests passing.
+
 - **Pure-Python RSA Attack Suite (`ctfsolver/solvers/rsa_attacks.py`)**:
   - Implements direct cryptographic attacks on RSA without external binary dependencies:
     - Small/low public exponent attack ($m^e < n$, small $k \cdot n + c$ root search).

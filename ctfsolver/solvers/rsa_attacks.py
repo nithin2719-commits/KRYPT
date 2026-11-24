@@ -933,6 +933,17 @@ def parse_rsa_params(text: str) -> dict[str, Any]:
 # 10. Top-Level solve(target, workdir)
 # =====================================================================
 
+from .registry import register_solver
+
+
+@register_solver(
+    name="rsa_attacks",
+    category="crypto",
+    priority=85,
+    match_ext=(".pem", ".key", ".rsa", ".txt"),
+    match_fn=lambda ctx: "begin" in ctx.combined_text.lower() or any(k in ctx.combined_text.lower() for k in ("n =", "e =", "c =", "n:", "e:", "c:")) or ctx.category == "crypto",
+    description="Pure-Python RSA attack suite (small-e, Wiener, Fermat, Pollard, Hastad)",
+)
 def solve(target: str, workdir: str = "") -> dict[str, Any]:
     """Main solver entry point: parse target parameters and run RSA attack suite."""
     text = ""
