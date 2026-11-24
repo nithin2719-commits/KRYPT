@@ -94,7 +94,7 @@ def _valid(val: str) -> bool:
     return bool(s) and not _PLACEHOLDER.match(s)
 
 
-def scan_text(text: str, strict: bool = False) -> list[dict]:
+def scan_text(text: str, strict: bool = False, format_hint: str = "") -> list[dict]:
     """De-duplicated flag candidates ranked by confidence.
 
     strict=True keeps only custom + named formats (drops the 'semi' fallback) —
@@ -107,7 +107,7 @@ def scan_text(text: str, strict: bool = False) -> list[dict]:
             return
         seen[val] = {"flag": val, "kind": kind, "confidence": conf}
 
-    custom = os.environ.get("CTF_FLAG_FORMAT")
+    custom = format_hint or os.environ.get("CTF_FLAG_FORMAT")
     if custom:
         try:
             for m in re.finditer(custom, text):
@@ -138,8 +138,9 @@ def scan_text(text: str, strict: bool = False) -> list[dict]:
     return sorted(vals, key=lambda d: -d["confidence"])
 
 
-def scan_bytes(data: bytes) -> list[dict]:
-    return scan_text(data.decode("latin-1", "replace"))
+def scan_bytes(data: bytes, format_hint: str = "") -> list[dict]:
+    return scan_text(data.decode("latin-1", "replace"), format_hint=format_hint)
+
 
 
 # runs that are worth trying to decode: long enough to carry a wrapped flag,
@@ -149,7 +150,7 @@ _HEX_RUN = re.compile(rb"(?:[0-9a-fA-F]{2}){8,256}")
 
 
 def scan_encoded(data: bytes, max_bytes: int = 16 * 1024 * 1024,
-                 max_runs: int = 4000) -> list[dict]:
+                 max_runs: int = 4000, format_hint: str = "") -> list[dict]:
     """Instant one-level decode sweep: find base64/hex runs, decode them, and
     report any flag that only appears *after* decoding.
 
@@ -171,10 +172,11 @@ def scan_encoded(data: bytes, max_bytes: int = 16 * 1024 * 1024,
             text = decoded.decode("latin-1", "replace")
         except Exception:
             return
-        for f in scan_text(text, strict=True):
+        for f in scan_text(text, strict=True, format_hint=format_hint):
             val = f["flag"]
             if val not in out:
                 out[val] = {**f, "kind": enc, "encoded": True}
+
 
     runs = 0
     for m in _B64_RUN.finditer(data):
@@ -249,12 +251,13 @@ def scan_magic(data: bytes, max_bytes: int = 16 * 1024) -> list[dict]:
     return sorted(out.values(), key=lambda d: -d["confidence"])
 
 
-def scan_file(path: str, max_bytes: int = 64 * 1024 * 1024) -> list[dict]:
+def scan_file(path: str, max_bytes: int = 64 * 1024 * 1024, format_hint: str = "") -> list[dict]:
     try:
         with open(path, "rb") as fh:
-            return scan_bytes(fh.read(max_bytes))
+            return scan_bytes(fh.read(max_bytes), format_hint=format_hint)
     except OSError:
         return []
+
 
 
 def instant_scan(path: str, max_bytes: int = 64 * 1024 * 1024) -> list[dict]:

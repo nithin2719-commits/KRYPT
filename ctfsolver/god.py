@@ -7,6 +7,7 @@ import concurrent.futures
 import datetime as dt
 import json
 import os
+import re
 import sys
 import time
 from typing import Any, Callable, Dict, List, Optional
@@ -56,6 +57,16 @@ class GodSolver:
         """Execute the apex god-tier solving pipeline on target/briefing."""
         self.start_time = time.time()
         fmt = flag_format or self.flag_format
+
+        # Auto-infer flag format from briefing/target if not explicitly supplied
+        if not fmt and (briefing or (target and not os.path.isfile(target))):
+            corpus = f"{briefing}\n{target if (target and not os.path.isfile(target)) else ''}"
+            m_fmt = re.search(r"(?:(?:flag|format)(?:\s*(?:format|is|:|=)){1,3}\s*)([a-zA-Z0-9_\-]+)\{", corpus, re.IGNORECASE)
+            if m_fmt:
+                prefix = m_fmt.group(1)
+                fmt = rf"{prefix}\{{[^}}\n]{{1,200}}\}}"
+                self._log("DETECT", f"Auto-inferred flag format from briefing: {fmt}")
+
         resolved_category = category
 
         # Generate isolated workspace
@@ -74,10 +85,12 @@ class GodSolver:
         # PHASE 0: TARGET ACQUISITION & DETECTION
         # =====================================================================
         target_info = None
-        if target:
+        if target and os.path.isfile(target):
             target_info = detect.classify(target)
             if resolved_category == "auto":
                 resolved_category = target_info.subkind if target_info.kind == "file" else target_info.kind
+        elif target and resolved_category == "auto":
+            resolved_category = "crypto"
         self._log("DETECT", f"Identified category: {resolved_category}")
         phases_run.append("detection")
 
@@ -89,7 +102,7 @@ class GodSolver:
 
         # Briefing sweep
         if briefing:
-            b_flags = scan_text(briefing)
+            b_flags = scan_text(briefing, format_hint=fmt)
             if b_flags:
                 all_flags.extend(b_flags)
                 findings_log.append(f"Briefing scan recovered {len(b_flags)} candidate(s)")
@@ -97,11 +110,11 @@ class GodSolver:
         # Target file sweep
         if target and os.path.isfile(target):
             try:
-                raw_flags = scan_file(target)
+                raw_flags = scan_file(target, format_hint=fmt)
                 all_flags.extend(raw_flags)
                 with open(target, "rb") as fh:
                     f_bytes = fh.read(16 * 1024 * 1024)
-                enc_flags = scan_encoded(f_bytes)
+                enc_flags = scan_encoded(f_bytes, format_hint=fmt)
                 all_flags.extend(enc_flags)
 
                 # Magic BFS decoder
@@ -112,6 +125,23 @@ class GodSolver:
                     findings_log.append(f"Magic BFS decoder recovered flag: {m.get('flags', [])}")
             except Exception as e:
                 self._log("TIER1", f"Instant triage error: {e}")
+        elif target and not os.path.isfile(target):
+            # Target is a raw in-memory string, ciphertext, or base64/hex token
+            try:
+                t_flags = scan_text(target, format_hint=fmt)
+                all_flags.extend(t_flags)
+                t_bytes = target.encode("latin-1", "replace")
+                enc_flags = scan_encoded(t_bytes, format_hint=fmt)
+                all_flags.extend(enc_flags)
+
+                from .decoders import magic
+                m = magic(t_bytes)
+                if m.get("found"):
+                    all_flags.extend(m.get("flags", []))
+                    findings_log.append(f"Magic BFS decoder recovered flag from string: {m.get('flags', [])}")
+            except Exception as e:
+                self._log("TIER1", f"Instant string triage error: {e}")
+
 
         # Check if Tier 1 captured the flag
         valid_t1 = self._validate_flags(all_flags, fmt)
@@ -126,12 +156,15 @@ class GodSolver:
 
         # Prepare combined text for text-based solvers
         text_for_solvers = briefing
-        if target and os.path.isfile(target):
-            try:
-                with open(target, "r", errors="replace") as fh:
-                    text_for_solvers += "\n" + fh.read(40000)
-            except OSError:
-                pass
+        if target:
+            if os.path.isfile(target):
+                try:
+                    with open(target, "r", errors="replace") as fh:
+                        text_for_solvers += "\n" + fh.read(40000)
+                except OSError:
+                    pass
+            else:
+                text_for_solvers = f"{text_for_solvers}\n{target}" if text_for_solvers else target
 
         from .solvers.registry import SolverContext, get_matching_solvers
 
@@ -153,19 +186,27 @@ class GodSolver:
             for s in matched_solvers:
                 solver_tasks.append(executor.submit(lambda s=s: (s.name, s.fn(ctx))))
 
-            # Gather results
+            # Gather results with early exit on high-confidence match
             for future in concurrent.futures.as_completed(solver_tasks, timeout=90):
                 try:
                     s_name, s_res = future.result()
-                    s_flags = s_res.get("flags", [])
+                    s_flags = s_res.get("flags", []) if isinstance(s_res, dict) else []
                     if s_flags:
                         for f in s_flags:
                             f["source"] = f"god_tier_{s_name}"
                         all_flags.extend(s_flags)
                         findings_log.append(f"Solver [{s_name}] found {len(s_flags)} flag candidate(s)")
                         self._log("HIT", f"Solver [{s_name}] captured candidate flag!")
+
+                        # Fast-path early exit if high-confidence flag found
+                        quick_val = self._validate_flags(s_flags, fmt)
+                        if quick_val and quick_val[0].get("confidence", 0) >= 90:
+                            for t in solver_tasks:
+                                t.cancel()
+                            break
                 except Exception as ex:
                     self._log("TIER2", f"Solver exception: {ex}")
+
 
         valid_t2 = self._validate_flags(all_flags, fmt)
         if valid_t2:
@@ -213,21 +254,37 @@ class GodSolver:
         }
 
     def _validate_flags(self, flags: List[dict[str, Any]], flag_format: str = "") -> List[dict[str, Any]]:
-        """Filter out placeholder noise and ensure format compatibility."""
-        valid = []
-        import re
+        """Filter out placeholder noise, deduplicate, and rank by confidence and length."""
+        valid: list[dict[str, Any]] = []
         pat = re.compile(flag_format) if flag_format else None
 
+        seen: set[str] = set()
         for f in flags:
             candidate = f.get("flag", "").strip()
-            if not candidate:
+            # Clean wrapping quotes or trailing periods
+            candidate = re.sub(r"^['\"]|['\"]$", "", candidate).strip()
+            if candidate.endswith(".") and not candidate.endswith("..."):
+                candidate = candidate[:-1]
+
+            if not candidate or candidate in seen:
                 continue
-            if any(p in candidate.lower() for p in ("flag{here", "flag{test", "flag{password", "flag{your_flag", "flag{placeholder")):
+            if any(p in candidate.lower() for p in ("flag{here", "flag{test", "flag{password", "flag{your_flag", "placeholder", "fake_flag", "fake_placeholder")):
                 continue
             if pat and not pat.search(candidate):
                 continue
-            valid.append(f)
-        return valid
+            seen.add(candidate)
+            f_clean = dict(f)
+            f_clean["flag"] = candidate
+            valid.append(f_clean)
+
+        # Drop shorter substring fragments if a longer parent flag exists (e.g. CTF{x} inside picoCTF{x})
+        all_candidates = [v["flag"] for v in valid]
+        filtered = [v for v in valid if not any(o != v["flag"] and v["flag"] in o for o in all_candidates)]
+
+        # Sort by confidence descending, then by length descending
+        filtered.sort(key=lambda x: (x.get("confidence", 50), len(x.get("flag", ""))), reverse=True)
+        return filtered
+
 
     def _finalize_solve(
         self,

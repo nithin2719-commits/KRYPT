@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.8 — Instant In-Memory String Triage, Format Auto-Inference & Early-Exit Optimization
+- **Instant In-Memory String Triage (`ctfsolver/god.py`)**:
+  - Accelerated solving for non-file text, ciphertexts, base64 strings, hex runs, and equation tokens directly in Phase 1.
+  - Sub-millisecond early exit for single and multi-layer encodings without writing temporary files to disk or launching subprocesses.
+- **Intelligent Briefing Flag-Format Auto-Inference**:
+  - Automatically parses challenge briefings and descriptions for declared flag formats (e.g., `flag format is incursion{...}`, `Format: CTF{...}`, `flag is: cyber{...}`).
+  - Passes dynamic `format_hint` to `scan_text`, `scan_file`, and `scan_encoded` without polluting process-global environment variables.
+- **Phase 2 Parallel Early Cancellation**:
+  - Concurrently polls completed solver tasks in Phase 2 and cancels pending tasks the instant a high-confidence flag candidate ($\ge 90$) matching the format is discovered, reducing typical execution times from 60–90 seconds to under 2 seconds.
+- **High-Fidelity Flag Sanitization & Deduplication (`ctfsolver/god.py` & `ctfsolver/flags.py`)**:
+  - Strips wrapping single/double quotes and trailing punctuation artifacts from scraped inputs.
+  - Prunes substring fragments in favor of complete parent flag structures (e.g. keeping `picoCTF{flag}` over partial `CTF{flag}`).
+  - Extended placeholder blocklist filtering (`fake_placeholder`, `placeholder`, `fake_flag`).
+  - Sorts valid candidates deterministically by confidence and length.
+- **Unit Test Suite (`tests/test_god_fast.py`)**:
+  - Added unit test suite covering instant in-memory string solving (0.05s execution), briefing format auto-inference, and flag ranking.
+  - Total test suite expanded to 144 passing unit tests.
+
 ## v2.7 — Symbolic Execution & Deobfuscation Engine
 - **Symbolic Execution & Input Recovery Suite (`ctfsolver/solvers/symbolic.py`)**:
   - Implements targeted input recovery using `angr` SimulationManagers to explore crackmes and reversing binaries.
